@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard, Users, Calendar, Trophy,
   QrCode, ClipboardList, BookOpen, DollarSign,
   Bell, FileText, Settings, LogOut, Menu, X,
   ChevronRight, Shield, GraduationCap, History, ScanLine, TrendingUp, CalendarDays
 } from "lucide-react";
-import { API_BASE } from "../lib/api";
+import { API_BASE, apiFetch } from "../lib/api";
 
 export type Screen =
   | "login" | "register"
@@ -32,6 +32,7 @@ interface LoggedUser {
   last_name?: string;
   full_name?: string;
   profile_photo?: string | null;
+  student_id?: string;
 }
 
 const navItems: NavItem[] = [
@@ -70,11 +71,30 @@ interface LayoutProps {
 export function Layout({ currentScreen, setScreen, role, onLogout, children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<LoggedUser | null>(null);
+  const [unread, setUnread] = useState(0);
+  const mainRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem("user");
     if (savedUser) setUser(JSON.parse(savedUser));
   }, []);
+
+  // Students: count unread notifications for the bell badge.
+  useEffect(() => {
+    if (role !== "student" || !user?.student_id) return;
+    let cancelled = false;
+    apiFetch(`/api/notifications/${user.student_id}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => {
+        if (!cancelled && Array.isArray(rows)) {
+          setUnread(rows.filter((n: { is_read?: number }) => Number(n.is_read) !== 1).length);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [role, user?.student_id, currentScreen]);
 
   const filteredNav = navItems.filter(item => item.roles.includes(role));
 
@@ -98,8 +118,14 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
   };
 
   const pageLabel =
-    navItems.find(n => n.screen === currentScreen)?.label ??
+    navItems.find(n => n.screen === currentScreen && n.roles.includes(role))?.label ??
     (currentScreen === "profile" ? "My Profile" : "Dashboard");
+
+  // New page: start at the top and show its name in the browser tab.
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+    document.title = `${pageLabel} · SPORTPASS`;
+  }, [currentScreen, pageLabel]);
 
   return (
     <div className="flex h-dvh bg-background overflow-hidden">
@@ -157,7 +183,7 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
         <div className="px-4 py-4 border-t border-white/10">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: "var(--accent)" }}>
-              {photoUrl ? <img src={photoUrl} className="w-full h-full object-cover" /> : initials}
+              {photoUrl ? <img src={photoUrl} alt="" className="w-full h-full object-cover" /> : initials}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-semibold truncate">{fullName}</p>
@@ -201,22 +227,31 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
             <button
               onClick={() => setScreen("notifications")}
               className="relative p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/8 transition-all"
+              aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
             >
               <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "var(--accent)" }} />
+              {unread > 0 && (
+                <span
+                  className="absolute top-0.5 right-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] leading-4 font-bold text-white text-center"
+                  style={{ background: "#EF4444" }}
+                >
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              )}
             </button>
 
             <button
               onClick={() => setScreen(role === "student" ? "profile" : "settings")}
+              aria-label={role === "student" ? "My profile" : "Settings"}
               className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-white text-xs font-bold"
               style={{ background: "var(--primary)" }}
             >
-              {photoUrl ? <img src={photoUrl} className="w-full h-full object-cover" /> : initials}
+              {photoUrl ? <img src={photoUrl} alt="" className="w-full h-full object-cover" /> : initials}
             </button>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6">
+        <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6">
           {children}
         </main>
       </div>

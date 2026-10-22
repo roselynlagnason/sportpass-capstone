@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { Search, Download, Eye, Edit2, Trash2 } from "lucide-react";
 import { apiFetch, API_BASE } from "../lib/api";
 import { downloadCSV, fileStamp } from "../lib/reports";
+import { PageError, num } from "./PageStatus";
+
+// Same colour for a student every time, whatever the filter.
+const avatarColor = (id: string) => {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return `hsl(${h}, 55%, 48%)`;
+};
 
 interface Student {
   id: string;
@@ -16,10 +24,16 @@ interface Student {
   department: string;
   course: string;
   photo: string | null;
-  status: string;
   points: number;
-  attendance: number;
+  daysAttended: number;
+  daysHeld: number;
 }
+
+const attendanceText = (s: Student) =>
+  s.daysHeld > 0 ? `${s.daysAttended} of ${s.daysHeld} days` : "No sportfest days yet";
+
+const attendanceRate = (s: Student) =>
+  s.daysHeld > 0 ? Math.round((s.daysAttended / s.daysHeld) * 100) : null;
 
 export function StudentManagement() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -27,7 +41,8 @@ export function StudentManagement() {
   const [yearFilter, setYearFilter] = useState("all");
   const [genderFilter, setGenderFilter] = useState("all");
   const [selected, setSelected] = useState<Student | null>(null);
-  const [loading, setLoading] = useState(true);
+const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const [editing, setEditing] = useState<Student | null>(null);
   const [editForm, setEditForm] = useState({
@@ -147,15 +162,24 @@ export function StudentManagement() {
           { label: "Section", value: (s) => s.section },
           { label: "Gender", value: (s) => s.gender },
           { label: "Email", value: (s) => s.email },
-          { label: "Contact", value: (s) => s.contact },
+{ label: "Contact", value: (s) => s.contact },
+          { label: "Points", value: (s) => s.points },
+          { label: "Days Attended", value: (s) => s.daysAttended },
+          { label: "Sportfest Days Held", value: (s) => s.daysHeld },
         ],
       },
     ]);
 
   const fetchStudents = async () => {
+    setLoadError("");
     try {
       const response = await apiFetch("/api/auth/students");
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !Array.isArray(data)) {
+        setLoadError(data?.message || "The student list couldn't be loaded.");
+        return;
+      }
 
       const formatted = data.map((s: any) => ({
         id: s.student_id,
@@ -169,15 +193,15 @@ export function StudentManagement() {
         contact: s.contact || "N/A",
         department: s.department || "Computer Studies Department",
         course: s.course || "",
-        photo: s.profile_photo,
-        status: "active",
-        points: 0,
-        attendance: 0,
+photo: s.profile_photo,
+        points: Number(s.total_points || 0),
+        daysAttended: Number(s.days_attended || 0),
+        daysHeld: Number(s.days_held || 0),
       }));
 
       setStudents(formatted);
-    } catch (error) {
-      console.error("Failed to fetch students:", error);
+    } catch {
+      setLoadError("Can't reach the server.");
     } finally {
       setLoading(false);
     }
@@ -188,7 +212,7 @@ export function StudentManagement() {
   }, []);
 
  const filtered = students.filter((s) => {
-  const keyword = search.toLowerCase();
+  const keyword = search.trim().toLowerCase();
 
   const matchesSearch =
     s.name.toLowerCase().includes(keyword) ||
@@ -204,11 +228,16 @@ export function StudentManagement() {
   return matchesSearch && matchesYear && matchesGender;
 });
 
-  const activeCount = students.filter((s) => s.status === "active").length;
   const avgPoints =
     students.length > 0
       ? Math.round(students.reduce((a, s) => a + s.points, 0) / students.length)
       : 0;
+  const rates = students.map(attendanceRate).filter((x): x is number => x !== null);
+  const avgAttendance = rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length) : null;
+
+  if (loadError && students.length === 0) {
+    return <PageError message={loadError} onRetry={() => { setLoading(true); fetchStudents(); }} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -235,28 +264,28 @@ export function StudentManagement() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {
-            label: "Total Students",
-            value: students.length.toString(),
+            label: "Registered Students",
+            value: num(students.length),
             color: "#2563EB",
             icon: "👥",
           },
           {
-            label: "Active",
-            value: activeCount.toString(),
+            label: "Shown (after filters)",
+            value: num(filtered.length),
             color: "#10B981",
-            icon: "✅",
+            icon: "🔎",
           },
           {
             label: "Avg. Points",
-            value: avgPoints.toString(),
+            value: num(avgPoints),
             color: "#8B5CF6",
             icon: "⭐",
           },
           {
-            label: "Department",
-            value: "CS",
+            label: "Avg. Attendance",
+            value: avgAttendance === null ? "–" : `${avgAttendance}%`,
             color: "#F59E0B",
-            icon: "🏫",
+            icon: "📅",
           },
         ].map((s) => (
           <div
@@ -352,7 +381,6 @@ export function StudentManagement() {
                   "Contact",
                   "Points",
                   "Attendance",
-                  "Status",
                   "Actions",
                 ].map((h) => (
                   <th
@@ -369,7 +397,7 @@ export function StudentManagement() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={9}
+colSpan={8}
                     className="px-5 py-8 text-center text-sm text-muted-foreground"
                   >
                     Loading students...
@@ -378,20 +406,22 @@ export function StudentManagement() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+colSpan={8}
                     className="px-5 py-8 text-center text-sm text-muted-foreground"
                   >
-                    No students found.
+{students.length === 0
+                      ? "No students have registered yet."
+                      : "No students match your search or filters."}
                   </td>
                 </tr>
               ) : (
-                filtered.map((s, i) => (
+filtered.map((s) => (
                   <tr key={s.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
                         <div
                           className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                          style={{ background: `hsl(${i * 36}, 60%, 50%)` }}
+style={{ background: avatarColor(s.id) }}
                         >
                           {s.photo ? (
                             <img
@@ -426,23 +456,22 @@ export function StudentManagement() {
                     </td>
 
                     <td className="px-5 py-3.5 text-sm font-bold text-foreground">
-                      {s.points}
+                      {num(s.points)}
                     </td>
 
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-3.5 whitespace-nowrap">
                       <span
                         className="text-xs font-semibold"
                         style={{
-                          color: s.attendance >= 90 ? "#10B981" : "#F59E0B",
+                          color:
+                            attendanceRate(s) === null
+                              ? "var(--muted-foreground)"
+                              : (attendanceRate(s) as number) >= 80
+                              ? "#10B981"
+                              : "#F59E0B",
                         }}
                       >
-                        {s.attendance}%
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-3.5">
-                      <span className="text-xs px-2.5 py-1 rounded-full font-semibold bg-green-50 text-green-600">
-                        {s.status}
+                        {attendanceText(s)}
                       </span>
                     </td>
 
@@ -450,6 +479,8 @@ export function StudentManagement() {
                       <div className="flex gap-1">
                         <button
                           onClick={() => setSelected(s)}
+                          aria-label={`View ${s.name}`}
+                          title="View details"
                           className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors"
                           style={{ color: "var(--primary)" }}
                         >
@@ -458,7 +489,8 @@ export function StudentManagement() {
 
                         <button
                           onClick={() => openEdit(s)}
-                          aria-label={`Edit ${s.name}`}
+aria-label={`Edit ${s.name}`}
+                          title="Edit"
                           className="p-1.5 rounded-lg hover:bg-yellow-50 transition-colors text-yellow-600"
                         >
                           <Edit2 size={14} />
@@ -466,7 +498,8 @@ export function StudentManagement() {
 
                         <button
                           onClick={() => deleteStudent(s)}
-                          aria-label={`Delete ${s.name}`}
+aria-label={`Delete ${s.name}`}
+                          title="Delete"
                           className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-400"
                         >
                           <Trash2 size={14} />
@@ -482,6 +515,10 @@ export function StudentManagement() {
       </div>
 
       {selected && (
+        <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setSelected(null)} />
+      )}
+
+      {selected && (
         <div
           className="fixed inset-y-0 right-0 w-full sm:w-80 z-50 border-l overflow-y-auto p-6"
           style={{
@@ -492,6 +529,7 @@ export function StudentManagement() {
         >
           <button
             onClick={() => setSelected(null)}
+            aria-label="Close"
             className="text-muted-foreground hover:text-foreground text-xl mb-4"
           >
             ×
@@ -500,7 +538,7 @@ export function StudentManagement() {
           <div className="text-center mb-5">
             <div
               className="w-16 h-16 rounded-full mx-auto overflow-hidden flex items-center justify-center text-white text-2xl font-bold mb-3"
-              style={{ background: "var(--primary)" }}
+              style={{ background: avatarColor(selected.id) }}
             >
               {selected.photo ? (
                 <img
@@ -521,14 +559,13 @@ export function StudentManagement() {
 
           <div className="space-y-3">
             {[
-              { label: "Course", value: selected.course || "Not set" },
+              { label: "Course", value: selected.course || "BSIT" },
               { label: "Year & Section", value: `${selected.year} – Section ${selected.section}` },
               { label: "Email", value: selected.email },
               { label: "Contact", value: selected.contact },
               { label: "Department", value: selected.department },
-              { label: "Points", value: `${selected.points} pts` },
-              { label: "Attendance", value: `${selected.attendance}%` },
-              { label: "Status", value: selected.status },
+              { label: "Points", value: `${num(selected.points)} pts` },
+              { label: "Attendance", value: attendanceText(selected) },
             ].map((f) => (
               <div
                 key={f.label}

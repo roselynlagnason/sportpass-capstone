@@ -22,6 +22,7 @@ import {
 } from "recharts";
 import type { Screen } from "./Layout";
 import { apiFetch } from "../lib/api";
+import { PageLoading, PageError, EmptyState, peso, num } from "./PageStatus";
 
 interface Props {
   setScreen: (s: Screen) => void;
@@ -134,18 +135,23 @@ function formatDate(date: string) {
 export function AdminDashboard({ setScreen }: Props) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const fetchDashboard = async () => {
+    setLoading(true);
+    setError("");
     try {
-      const response = await apiFetch(
-        "/api/admin/dashboard"
-      );
+      const response = await apiFetch("/api/admin/dashboard");
+      const result = await response.json().catch(() => ({}));
 
-      const result = await response.json();
+      if (!response.ok || !result.summary) {
+        setError(result.message || "The dashboard couldn't be loaded.");
+        return;
+      }
 
       setData(result);
     } catch {
-      alert("Failed to load admin dashboard.");
+      setError("Can't reach the server.");
     } finally {
       setLoading(false);
     }
@@ -155,13 +161,8 @@ export function AdminDashboard({ setScreen }: Props) {
     fetchDashboard();
   }, []);
 
-  if (loading || !data) {
-    return (
-      <div className="text-center py-20 text-muted-foreground">
-        Loading admin dashboard...
-      </div>
-    );
-  }
+  if (loading && !data) return <PageLoading label="Loading dashboard…" />;
+  if (error || !data) return <PageError message={error || undefined} onRetry={fetchDashboard} />;
 
   const summary = data.summary;
 
@@ -206,11 +207,11 @@ export function AdminDashboard({ setScreen }: Props) {
 
           <p className="text-white/65 text-sm mt-1.5">
             <span className="text-white font-semibold">
-              {summary.total_students} students
+              {num(summary.total_students)} {Number(summary.total_students) === 1 ? "student" : "students"}
             </span>{" "}
-            enrolled ·{" "}
+            registered ·{" "}
             <span style={{ color: "#F59E0B" }}>
-              {summary.total_activities} activities
+              {num(summary.total_activities)} {Number(summary.total_activities) === 1 ? "activity" : "activities"}
             </span>{" "}
             created
           </p>
@@ -249,7 +250,7 @@ export function AdminDashboard({ setScreen }: Props) {
         <StatCard
           icon={<Users size={18} />}
           label="Total Students"
-          value={summary.total_students}
+value={num(summary.total_students)}
           sub="Registered students"
           color="#2563EB"
         />
@@ -257,7 +258,7 @@ export function AdminDashboard({ setScreen }: Props) {
         <StatCard
           icon={<Calendar size={18} />}
           label="Activities"
-          value={summary.total_activities}
+value={num(summary.total_activities)}
           sub="Sportfest activities"
           color="#10B981"
         />
@@ -265,15 +266,15 @@ export function AdminDashboard({ setScreen }: Props) {
         <StatCard
           icon={<TrendingUp size={18} />}
           label="Total Points"
-          value={summary.total_points}
-          sub={`${summary.participation_points} participation + ${summary.accomplishment_points} accomplishment`}
+value={num(summary.total_points)}
+sub={`${num(summary.participation_points)} participation + ${num(summary.accomplishment_points)} accomplishment`}
           color="#F59E0B"
         />
 
         <StatCard
           icon={<DollarSign size={18} />}
           label="Outstanding Fines"
-          value={`₱${summary.outstanding_fines}`}
+value={peso(summary.outstanding_fines)}
           sub="Unpaid scan penalties"
           color="#EF4444"
         />
@@ -301,6 +302,9 @@ export function AdminDashboard({ setScreen }: Props) {
             </div>
           </div>
 
+          {yearChartData.every((y) => y.points === 0) ? (
+            <EmptyState text="No points earned yet. The chart fills in once students scan activity QR codes." />
+          ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart
               data={yearChartData}
@@ -352,6 +356,7 @@ export function AdminDashboard({ setScreen }: Props) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         <div
@@ -390,7 +395,7 @@ export function AdminDashboard({ setScreen }: Props) {
                 className="text-2xl font-heading font-bold mt-1"
                 style={{ color: "#2563EB" }}
               >
-                {summary.participation_points}
+{num(summary.participation_points)}
               </p>
             </div>
 
@@ -413,7 +418,7 @@ export function AdminDashboard({ setScreen }: Props) {
                 className="text-2xl font-heading font-bold mt-1"
                 style={{ color: "#F59E0B" }}
               >
-                {summary.accomplishment_points}
+{num(summary.accomplishment_points)}
               </p>
             </div>
 
@@ -436,7 +441,7 @@ export function AdminDashboard({ setScreen }: Props) {
                 className="text-2xl font-heading font-bold mt-1"
                 style={{ color: "#10B981" }}
               >
-                {summary.total_attendance}
+{num(summary.total_attendance)}
               </p>
             </div>
 
@@ -470,7 +475,7 @@ export function AdminDashboard({ setScreen }: Props) {
           </div>
 
           <div className="space-y-3">
-
+            {(data.topStudents ?? []).length === 0 && <EmptyState text="No students have earned points yet." />}
             {(data.topStudents ?? []).map((s, i) => {
               const fullName =
                 s.student_name?.trim() || "Unknown Student";
@@ -493,7 +498,7 @@ export function AdminDashboard({ setScreen }: Props) {
                 >
 
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
                     style={{
                       background:
                         i === 0
@@ -510,7 +515,7 @@ export function AdminDashboard({ setScreen }: Props) {
                   </div>
 
                   <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                    className="hidden sm:flex w-9 h-9 rounded-full items-center justify-center text-white text-xs font-bold flex-shrink-0"
                     style={{
                       background:
                         colors[i % colors.length],
@@ -530,10 +535,10 @@ export function AdminDashboard({ setScreen }: Props) {
                   </div>
 
                   <div
-                    className="font-heading font-bold"
+                    className="font-heading font-bold flex-shrink-0"
                     style={{ color: "var(--accent)" }}
                   >
-                    {Number(s.total_points)} pts
+                    {num(s.total_points)} pts
                   </div>
 
                 </div>
@@ -566,7 +571,7 @@ export function AdminDashboard({ setScreen }: Props) {
           </div>
 
           <div className="space-y-3">
-
+            {(data.recentActivities ?? []).length === 0 && <EmptyState text="No activities yet. Add one under Activity Management." />}
             {(data.recentActivities ?? []).map((a) => (
               <div
                 key={a.activity_id}
@@ -589,9 +594,9 @@ export function AdminDashboard({ setScreen }: Props) {
                     {a.sport_name} - {a.activity_name}
                   </p>
 
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(a.activity_date)} ·{" "}
-                    {a.activity_location}
+                  <p className="text-xs text-muted-foreground truncate">
+                    {formatDate(a.activity_date)}
+                    {a.activity_location ? ` · ${a.activity_location}` : ""}
                   </p>
                 </div>
 
@@ -625,8 +630,9 @@ export function AdminDashboard({ setScreen }: Props) {
 
       {/* OUTSTANDING FINES */}
       {summary.outstanding_fines > 0 && (
-        <div
-          className="rounded-2xl p-4 flex items-center gap-3 cursor-pointer hover:opacity-90 transition-all"
+        <button
+          type="button"
+          className="w-full text-left rounded-2xl p-4 flex items-center gap-3 hover:opacity-90 transition-all"
           style={{
             background: "#FEF2F2",
             border: "1px solid #EF444430",
@@ -646,7 +652,7 @@ export function AdminDashboard({ setScreen }: Props) {
               className="text-sm font-bold"
               style={{ color: "#DC2626" }}
             >
-              ₱{summary.outstanding_fines} outstanding fines detected
+{peso(summary.outstanding_fines)} in unpaid fines
             </p>
 
             <p className="text-xs text-red-700">
@@ -660,7 +666,7 @@ export function AdminDashboard({ setScreen }: Props) {
           >
             View →
           </span>
-        </div>
+        </button>
       )}
 
       {/* QUICK ACTIONS */}

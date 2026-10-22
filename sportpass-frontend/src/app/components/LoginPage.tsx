@@ -1,9 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Trophy, Eye, EyeOff, AlertCircle } from "lucide-react";
 import type { Role } from "./Layout";
-import { apiFetch } from "../lib/api";
-
-
+import { apiFetch, API_BASE } from "../lib/api";
 
 interface LoginPageProps {
   onLogin: (role: Role) => void;
@@ -17,48 +15,63 @@ export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
- const handleLogin = async () => {
-  setError("");
+  const [slowServer, setSlowServer] = useState(false);
+  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  if (!email || !password) {
-    setError("Please enter your email and password.");
-    return;
-  }
+  // The free online server sleeps when unused. Wake it while the user types.
+  useEffect(() => {
+    fetch(`${API_BASE}/`).catch(() => {});
+    return () => {
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+    };
+  }, []);
 
-  try {
-    setLoading(true);
+  const handleLogin = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (loading) return;
+    setError("");
 
-    const response = await apiFetch("/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-    });
+    const cleanEmail = email.trim();
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      setError(data.message || "Login failed.");
+    if (!cleanEmail || !password) {
+      setError("Please enter your email and password.");
       return;
     }
 
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
+    setLoading(true);
+    setSlowServer(false);
+    slowTimer.current = setTimeout(() => setSlowServer(true), 5000);
 
-    onLogin(data.user.role);
-  } catch (error) {
-    setError("Cannot connect to server.");
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      const response = await apiFetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail, password }),
+      });
 
-  
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setError(data.message || "Login failed. Please try again.");
+        return;
+      }
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      onLogin(data.user.role);
+    } catch {
+      setError("Can't reach the server. Check your internet connection and try again.");
+    } finally {
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+      setSlowServer(false);
+      setLoading(false);
+    }
+  };
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      className="min-h-dvh flex items-center justify-center p-4 relative overflow-hidden"
       style={{ background: "linear-gradient(135deg, #0F2450 0%, #1E3A6E 40%, #2563EB 100%)" }}
     >
       {/* Decorative blobs */}
@@ -80,48 +93,55 @@ export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl p-7 shadow-2xl" style={{ background: "rgba(255,255,255,0.97)" }}>
+        <form onSubmit={handleLogin} noValidate className="rounded-2xl p-6 sm:p-7 shadow-2xl" style={{ background: "rgba(255,255,255,0.97)" }}>
           <h2 className="font-heading font-bold text-foreground text-lg mb-1">Log In to SportPass</h2>
-          <p className="text-muted-foreground text-sm mb-5">Enter your credentials to continue</p>
+          <p className="text-muted-foreground text-sm mb-5">Use the email and password you registered with.</p>
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 p-3 rounded-xl mb-4 text-sm" style={{ background: "#FEF2F2", color: "#EF4444" }}>
-              <AlertCircle size={15} className="flex-shrink-0" />
+            <div role="alert" className="flex items-start gap-2 p-3 rounded-xl mb-4 text-sm" style={{ background: "#FEF2F2", color: "#B91C1C" }}>
+              <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
           {/* Email */}
           <div className="mb-4">
-            <label className="text-sm font-semibold text-foreground mb-1.5 block">Email Address</label>
+            <label htmlFor="login-email" className="text-sm font-semibold text-foreground mb-1.5 block">Email Address</label>
             <input
+              id="login-email"
               type="email"
+              autoComplete="email"
+              inputMode="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              autoFocus
               value={email}
               onChange={e => { setEmail(e.target.value); setError(""); }}
-              onKeyDown={e => e.key === "Enter" && handleLogin()}
               className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none transition-all"
               style={{ background: "var(--input-background)", borderColor: "var(--border)", color: "var(--foreground)" }}
-              placeholder="yourname@sportpass.edu.ph"
+              placeholder="you@example.com"
             />
           </div>
 
           {/* Password */}
           <div className="mb-5">
-            <label className="text-sm font-semibold text-foreground mb-1.5 block">Password</label>
+            <label htmlFor="login-password" className="text-sm font-semibold text-foreground mb-1.5 block">Password</label>
             <div className="relative">
               <input
+                id="login-password"
                 type={showPass ? "text" : "password"}
+                autoComplete="current-password"
                 value={password}
                 onChange={e => { setPassword(e.target.value); setError(""); }}
-                onKeyDown={e => e.key === "Enter" && handleLogin()}
                 className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none pr-11"
                 style={{ background: "var(--input-background)", borderColor: "var(--border)", color: "var(--foreground)" }}
                 placeholder="Enter password"
               />
               <button
                 type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-foreground"
+                aria-label={showPass ? "Hide password" : "Show password"}
                 onClick={() => setShowPass(p => !p)}
               >
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -130,54 +150,39 @@ export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
           </div>
 
           <button
-            onClick={handleLogin}
+            type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl text-white font-heading font-bold text-sm transition-all hover:opacity-90 active:scale-95 shadow-lg flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-xl text-white font-heading font-bold text-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-80 disabled:cursor-wait shadow-lg flex items-center justify-center gap-2"
             style={{ background: "linear-gradient(135deg, #2563EB, #1D4ED8)" }}
           >
             {loading ? (
               <>
                 <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                Signing in...
+                Logging in…
               </>
             ) : "Log In"}
           </button>
 
-          {/* <div className="mt-5 pt-5 border-t" style={{ borderColor: "var(--border)" }}>
-            <p className="text-xs text-muted-foreground mb-2.5 text-center font-semibold">Demo Accounts</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => fillDemo("admin")}
-                className="py-2 px-3 rounded-xl border text-xs font-semibold text-left transition-all hover:border-primary hover:bg-primary/5"
-                style={{ borderColor: "var(--border)" }}
-              >
-                <p className="font-bold" style={{ color: "var(--primary)" }}>Administrator</p>
-                <p className="text-muted-foreground text-xs mt-0.5 truncate">admin@sportpass.edu.ph</p>
-              </button>
-              <button
-                onClick={() => fillDemo("student")}
-                className="py-2 px-3 rounded-xl border text-xs font-semibold text-left transition-all hover:border-accent hover:bg-accent/5"
-                style={{ borderColor: "var(--border)" }}
-              >
-                <p className="font-bold" style={{ color: "var(--accent)" }}>Student</p>
-                <p className="text-muted-foreground text-xs mt-0.5 truncate">student@sportpass.edu.ph</p>
-              </button>
-            </div>
-          </div> */}
+          {slowServer && (
+            <p className="text-xs text-muted-foreground text-center mt-3" aria-live="polite">
+              The server is waking up after being idle. This can take up to a minute; please wait.
+            </p>
+          )}
+
 
           <p className="text-center text-xs text-muted-foreground mt-5">
             New student?{" "}
-            <button onClick={onRegister} className="font-semibold hover:underline" style={{ color: "var(--primary)" }}>
+            <button type="button" onClick={onRegister} className="font-semibold hover:underline" style={{ color: "var(--primary)" }}>
               Register here
             </button>
           </p>
           <p className="text-center text-xs text-muted-foreground mt-2">
             Forgot your password? Ask a sportfest administrator to reset it.
           </p>
-        </div>
+        </form>
 
-        <p className="text-center text-white/25 text-xs mt-6">
-          ©Nexify 2026 Cristal e-College · Department of Computer Studies
+        <p className="text-center text-white/50 text-xs mt-6">
+          © 2026 Nexify · Cristal e-College · Department of Computer Studies
         </p>
       </div>
     </div>

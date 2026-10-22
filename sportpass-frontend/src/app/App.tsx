@@ -23,11 +23,46 @@ import { StudentActivities } from "./components/StudentActivities";
 import { SportfestDays } from "./components/SportfestDays";
 import { applyPrimaryColor, loadSettings } from "./lib/settings";
 
+// Pages each role may open. The current page is kept in the address bar
+// (e.g. #/students) so refreshing keeps you on it and the phone's Back
+// button goes to the previous page instead of leaving the system.
+const SCREENS: Record<Role, Screen[]> = {
+  admin: [
+    "admin-dashboard", "students", "activities", "sportfest-days", "attendance",
+    "fines", "performance", "rankings", "notifications", "reports", "settings",
+  ],
+  student: [
+    "student-dashboard", "qr-code", "attendance-history", "activities", "activity-scanner",
+    "passport", "performance", "rankings", "my-fines", "notifications", "profile",
+  ],
+};
+
+const homeFor = (r: Role): Screen => (r === "student" ? "student-dashboard" : "admin-dashboard");
+
+function screenFromHash(r: Role): Screen {
+  const name = window.location.hash.replace(/^#\/?/, "") as Screen;
+  return SCREENS[r].includes(name) ? name : homeFor(r);
+}
+
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [role, setRole] = useState<Role>("student");
-  const [screen, setScreen] = useState<Screen>("student-dashboard");
+  const [screen, setScreenState] = useState<Screen>("student-dashboard");
+
+  const setScreen = (next: Screen) => {
+    if (window.location.hash !== `#/${next}`) {
+      window.history.pushState(null, "", `#/${next}`);
+    }
+    setScreenState(next);
+  };
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    const onBack = () => setScreenState(screenFromHash(role));
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, [loggedIn, role]);
   // Bumped when saved settings arrive, so reward titles etc. re-render.
   const [, setSettingsVersion] = useState(0);
 
@@ -45,17 +80,26 @@ export default function App() {
     const savedUser = localStorage.getItem("user");
 
     if (savedUser) {
-      const user = JSON.parse(savedUser);
-      setRole(user.role);
-      setLoggedIn(true);
-      setScreen(user.role === "student" ? "student-dashboard" : "admin-dashboard");
+      try {
+        const user = JSON.parse(savedUser);
+        const r: Role = user.role === "admin" ? "admin" : "student";
+        const start = screenFromHash(r);
+        window.history.replaceState(null, "", `#/${start}`);
+        setRole(r);
+        setLoggedIn(true);
+        setScreenState(start);
+      } catch {
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+      }
     }
   }, []);
 
   const handleLogin = (selectedRole: Role) => {
     setRole(selectedRole);
     setLoggedIn(true);
-    setScreen(selectedRole === "student" ? "student-dashboard" : "admin-dashboard");
+    window.history.replaceState(null, "", `#/${homeFor(selectedRole)}`);
+    setScreenState(homeFor(selectedRole));
   };
 
   const handleLogout = () => {
@@ -65,7 +109,8 @@ export default function App() {
     setLoggedIn(false);
     setRegistering(false);
     setRole("student");
-    setScreen("student-dashboard");
+    setScreenState("student-dashboard");
+    window.history.replaceState(null, "", window.location.pathname);
   };
 
   if (!loggedIn) {

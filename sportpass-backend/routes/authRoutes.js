@@ -34,8 +34,19 @@ router.post("/register", upload.singlePhoto("profile_photo"), async (req, res) =
   const photo_data = req.file ? req.file.buffer : null;
   const photo_type = req.file ? req.file.mimetype : null;
 
-  if (!student_id || !first_name || !last_name || !email || !password || !year_level) {
-    return res.status(400).json({ message: "Please fill in all required fields" });
+  if (
+    !student_id || !first_name || !last_name || !email || !password || !year_level ||
+    !gender || !section || !contact
+  ) {
+    return res.status(400).json({ message: "Please fill in all required fields." });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ message: "Please upload a profile photo." });
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) {
+    return res.status(400).json({ message: "Please enter a valid email address." });
   }
 
   if (String(password).length < 8) {
@@ -225,10 +236,24 @@ router.get("/students", requireAuth, requireAdmin, (req, res) => {
       students.section,
       students.profile_photo,
       users.email,
-      users.created_at
+      users.created_at,
+      COALESCE(pts.total_points, 0) AS total_points,
+      COALESCE(att.days_attended, 0) AS days_attended,
+      (SELECT COUNT(*) FROM sportfest_days WHERE sportfest_date <= CURDATE()) AS days_held
     FROM students
     JOIN users ON students.user_id = users.user_id
-    ORDER BY users.created_at DESC
+    LEFT JOIN (
+      SELECT student_id, SUM(participation_points + accomplishment_points) AS total_points
+      FROM participation_records
+      GROUP BY student_id
+    ) pts ON pts.student_id = students.student_id
+    LEFT JOIN (
+      SELECT student_id, COUNT(*) AS days_attended
+      FROM daily_attendance
+      WHERE time_in IS NOT NULL
+      GROUP BY student_id
+    ) att ON att.student_id = students.student_id
+    ORDER BY students.last_name, students.first_name
   `;
 
   db.query(sql, (err, results) => {
