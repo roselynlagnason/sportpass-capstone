@@ -179,9 +179,9 @@ export function DigitalPassport() {
           </div>
         </div>
 
-        <div className="p-5 flex gap-5">
+        <div className="p-5 flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-5">
           <div
-            className="w-20 h-20 rounded-xl flex items-center justify-center text-white text-3xl font-bold"
+            className="w-20 h-20 rounded-xl flex items-center justify-center text-white text-3xl font-bold flex-shrink-0"
             style={{ background: "var(--accent)" }}
           >
             {fullName
@@ -191,7 +191,7 @@ export function DigitalPassport() {
               .slice(0, 2)}
           </div>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0 w-full">
             <p className="text-white/40 text-xs uppercase tracking-wide">
               Full Name
             </p>
@@ -219,7 +219,7 @@ export function DigitalPassport() {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 divide-x border-t border-white/10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x border-t border-white/10">
           {[
             {
               label: "Activities",
@@ -245,7 +245,7 @@ export function DigitalPassport() {
               value: `${summary?.total_points || 0}/20`,
             },
           ].map((s) => (
-            <div key={s.label} className="p-4 text-center">
+            <div key={s.label} className="p-3 sm:p-4 text-center border-white/10 [&:nth-child(n+3)]:border-t sm:[&:nth-child(n+3)]:border-t-0">
               <p className="text-xl font-heading font-bold text-white">
                 {s.value}
               </p>

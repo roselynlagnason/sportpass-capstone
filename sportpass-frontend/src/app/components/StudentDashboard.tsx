@@ -219,7 +219,7 @@ export function StudentDashboard({ setScreen }: Props) {
             </p>
           </div>
 
-          <div className="flex gap-5">
+          <div className="flex gap-5 justify-center sm:justify-start">
             <div className="text-center">
               <p className="text-2xl font-heading font-bold text-white">
                 {summary?.total_points || 0}

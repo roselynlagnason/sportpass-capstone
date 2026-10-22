@@ -102,13 +102,13 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
     (currentScreen === "profile" ? "My Profile" : "Dashboard");
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-dvh bg-background overflow-hidden">
       {sidebarOpen && (
         <div className="fixed inset-0 z-20 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-30 w-64 max-w-[85vw] flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
         style={{ background: "linear-gradient(180deg, #0F2450 0%, #1E3A6E 60%, #162D55 100%)" }}
       >
         <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
@@ -185,19 +185,19 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header
-          className="flex items-center gap-4 px-5 py-3.5 border-b flex-shrink-0"
+          className="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-3.5 border-b flex-shrink-0"
           style={{ background: "rgba(255,255,255,0.92)", backdropFilter: "blur(12px)", borderColor: "var(--border)" }}
         >
-          <button className="lg:hidden text-muted-foreground hover:text-foreground" onClick={() => setSidebarOpen(true)}>
+          <button className="lg:hidden -ml-1 p-1 text-muted-foreground hover:text-foreground" aria-label="Open menu" onClick={() => setSidebarOpen(true)}>
             <Menu size={22} />
           </button>
 
-          <div className="flex-1">
-            <h1 className="font-heading font-bold text-foreground text-base">{pageLabel}</h1>
-            <p className="text-muted-foreground text-xs">Computer Studies Sportfest</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-heading font-bold text-foreground text-base truncate">{pageLabel}</h1>
+            <p className="text-muted-foreground text-xs truncate">Computer Studies Sportfest</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={() => setScreen("notifications")}
               className="relative p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/8 transition-all"
@@ -216,7 +216,7 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-5 lg:p-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6">
           {children}
         </main>
       </div>

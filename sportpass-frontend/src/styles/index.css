@@ -1,3 +1,31 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+
+/* Responsive safety nets for phones and tablets */
+img,
+video,
+canvas {
+  max-width: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* iPhones zoom into form fields with text smaller than 16px; avoid that. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Keep the QR scanner video inside its box on every screen. */
+#attendance-reader video,
+#activity-reader video {
+  width: 100% !important;
+  height: auto !important;
+  object-fit: cover;
+}

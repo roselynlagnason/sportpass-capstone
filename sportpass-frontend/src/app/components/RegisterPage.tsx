@@ -172,7 +172,7 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
             <div className="space-y-4">
               <h2 className="font-heading font-bold text-foreground mb-4">Personal Information</h2>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InputField label="First Name" value={form.firstName} placeholder="Juan" onChange={(v) => update("firstName", v)} />
                 <InputField label="Last Name" value={form.lastName} placeholder="Dela Cruz" onChange={(v) => update("lastName", v)} />
               </div>
@@ -273,7 +273,7 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-semibold text-foreground mb-1.5 block">Year Level</label>
                   <select

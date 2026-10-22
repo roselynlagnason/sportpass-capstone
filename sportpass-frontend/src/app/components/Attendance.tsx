@@ -302,7 +302,7 @@ const totalOutstanding = totalIssued - totalPaid;
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowScanner(true)}
             disabled={!selected || !dayCanScan(selected)}
@@ -583,7 +583,7 @@ const totalOutstanding = totalIssued - totalPaid;
           style={{ background: "var(--card)", borderColor: "var(--border)" }}
         >
           <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[720px]">
             <thead>
               <tr
                 style={{
@@ -753,7 +753,7 @@ const totalOutstanding = totalIssued - totalPaid;
           style={{ background: "rgba(0,0,0,0.6)" }}
         >
           <div
-            className="w-full max-w-md rounded-2xl p-6 text-center shadow-2xl"
+            className="w-full max-w-md rounded-2xl p-4 sm:p-6 text-center shadow-2xl max-h-[95dvh] overflow-y-auto"
             style={{ background: "var(--card)" }}
           >
             <div className="flex items-center justify-between mb-4">

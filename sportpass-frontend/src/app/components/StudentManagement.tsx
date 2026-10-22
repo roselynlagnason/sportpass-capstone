@@ -336,7 +336,7 @@ export function StudentManagement() {
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
       >
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[720px]">
             <thead>
               <tr
                 style={{
@@ -557,7 +557,7 @@ export function StudentManagement() {
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }}>
-          <div className="w-full max-w-md rounded-2xl p-6 max-h-[90vh] overflow-y-auto" style={{ background: "var(--card)" }}>
+          <div className="w-full max-w-md rounded-2xl p-6 max-h-[90dvh] overflow-y-auto" style={{ background: "var(--card)" }}>
             <div className="flex items-center mb-1">
               <h3 className="font-heading font-bold text-foreground">Edit Student</h3>
               <button onClick={() => setEditing(null)} className="ml-auto text-muted-foreground hover:text-foreground text-xl">×</button>
@@ -584,7 +584,7 @@ export function StudentManagement() {
                 </div>
               ))}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="edit-year" className="text-sm font-semibold text-foreground mb-1.5 block">Year level</label>
                   <select

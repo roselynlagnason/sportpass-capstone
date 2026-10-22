@@ -202,7 +202,7 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
                 <button
                   key={key}
                   onClick={() => pickDate(key)}
-                  className="min-h-[72px] rounded-xl border p-1.5 text-left flex flex-col transition-all hover:shadow-sm"
+                  className="min-h-[52px] sm:min-h-[72px] min-w-0 overflow-hidden rounded-lg sm:rounded-xl border p-1 sm:p-1.5 text-left flex flex-col transition-all hover:shadow-sm"
                   style={{
                     borderColor: isActive ? "var(--primary)" : "var(--border)",
                     borderWidth: isActive ? 2 : 1,
@@ -222,8 +222,8 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
                   </span>
                   {day && (
                     <span className="mt-auto text-[11px] font-semibold leading-tight" style={{ color: day.status === "closed" ? "#6B7280" : "var(--primary)" }}>
-                      Day {dayNumber(day, days)}
-                      {day.title && <span className="block font-normal text-muted-foreground truncate">{day.title}</span>}
+                      <span className="hidden sm:inline">Day </span>{dayNumber(day, days)}
+                      {day.title && <span className="hidden sm:block font-normal text-muted-foreground truncate">{day.title}</span>}
                     </span>
                   )}
                 </button>
@@ -349,7 +349,7 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
           <p className="px-5 py-8 text-sm text-muted-foreground text-center">No sportfest days yet. Click a date on the calendar to add the first one.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground" style={{ background: "var(--muted)" }}>
                   <th className="px-5 py-3">Day</th>

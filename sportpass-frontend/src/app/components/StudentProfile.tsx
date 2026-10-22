@@ -438,7 +438,7 @@ export function StudentProfile() {
             </h3>
           </div>
 
-          <div className="p-5 grid grid-cols-3 gap-3">
+          <div className="p-4 sm:p-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
             {badges.map((b) => (
               <div
                 key={b.name}

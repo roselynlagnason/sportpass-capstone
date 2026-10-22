@@ -398,7 +398,7 @@ export function FineMonitoring({ setScreen }: Props) {
 
           </div>
 
-          <div className="flex gap-4">
+          <div className="grid grid-cols-3 gap-3 sm:flex sm:gap-4">
 
             <div className="text-center">
               <p
@@ -413,7 +413,7 @@ export function FineMonitoring({ setScreen }: Props) {
               </p>
             </div>
 
-            <div className="w-px bg-white/15" />
+            <div className="hidden sm:block w-px bg-white/15" />
 
             <div className="text-center">
               <p
@@ -428,7 +428,7 @@ export function FineMonitoring({ setScreen }: Props) {
               </p>
             </div>
 
-            <div className="w-px bg-white/15" />
+            <div className="hidden sm:block w-px bg-white/15" />
 
             <div className="text-center">
               <p className="text-2xl font-heading font-bold text-white">
@@ -446,7 +446,7 @@ export function FineMonitoring({ setScreen }: Props) {
 
       {/* SUMMARY */}
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
         <div
           className="rounded-2xl p-5 border"
@@ -661,7 +661,7 @@ export function FineMonitoring({ setScreen }: Props) {
 
         <div className="overflow-x-auto">
 
-          <table className="w-full">
+          <table className="w-full min-w-[720px]">
 
             <thead>
 

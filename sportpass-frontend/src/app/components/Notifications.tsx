@@ -187,7 +187,7 @@ export function Notifications() {
               : "Stay updated on activities, rankings, and alerts"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {!isAdmin && unread > 0 && (
             <button onClick={markAll} className="px-4 py-2.5 rounded-xl border text-sm font-semibold hover:bg-muted transition-all" style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
               Mark all read
@@ -280,7 +280,7 @@ export function Notifications() {
       {/* Compose modal (admins only) */}
       {isAdmin && showCompose && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }}>
-          <div className="w-full max-w-md rounded-2xl p-6" style={{ background: "var(--card)" }}>
+          <div className="w-full max-w-md rounded-2xl p-5 sm:p-6 max-h-[90dvh] overflow-y-auto" style={{ background: "var(--card)" }}>
             <div className="flex items-center gap-3 mb-5">
               <Bell size={18} style={{ color: "var(--primary)" }} />
               <h3 className="font-heading font-bold text-foreground">Send Notification</h3>

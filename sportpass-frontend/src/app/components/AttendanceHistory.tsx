@@ -194,7 +194,7 @@ export function AttendanceHistory() {
             </p>
           </div>
 
-          <div className="flex gap-4">
+          <div className="grid grid-cols-3 gap-3 sm:flex sm:gap-4">
             <div className="text-center">
               <p className="text-2xl font-heading font-bold" style={{ color: "#F59E0B" }}>
                 ₱30
@@ -202,7 +202,7 @@ export function AttendanceHistory() {
               <p className="text-white/55 text-xs">Missing Time-In</p>
             </div>
 
-            <div className="w-px bg-white/15" />
+            <div className="hidden sm:block w-px bg-white/15" />
 
             <div className="text-center">
               <p className="text-2xl font-heading font-bold" style={{ color: "#F59E0B" }}>
@@ -211,7 +211,7 @@ export function AttendanceHistory() {
               <p className="text-white/55 text-xs">Missing Time-Out</p>
             </div>
 
-            <div className="w-px bg-white/15" />
+            <div className="hidden sm:block w-px bg-white/15" />
 
             <div className="text-center">
               <p className="text-2xl font-heading font-bold text-white">
@@ -223,13 +223,13 @@ export function AttendanceHistory() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <div
-          className="rounded-2xl p-4 border text-center"
+          className="rounded-2xl p-3 sm:p-4 border text-center"
           style={{ background: "var(--card)", borderColor: "var(--border)" }}
         >
           <CheckCircle size={22} className="mx-auto mb-2" style={{ color: "#10B981" }} />
-          <p className="text-2xl font-heading font-bold" style={{ color: "#10B981" }}>
+          <p className="text-xl sm:text-2xl font-heading font-bold" style={{ color: "#10B981" }}>
             {complete}/{history.length}
           </p>
           <p className="text-xs font-semibold text-muted-foreground mt-1">
@@ -238,7 +238,7 @@ export function AttendanceHistory() {
         </div>
 
         <div
-          className="rounded-2xl p-4 border text-center"
+          className="rounded-2xl p-3 sm:p-4 border text-center"
           style={{ background: "var(--card)", borderColor: "var(--border)" }}
         >
           <Clock size={22} className="mx-auto mb-2" style={{ color: "#2563EB" }} />
@@ -254,7 +254,7 @@ export function AttendanceHistory() {
         </div>
 
         <div
-          className="rounded-2xl p-4 border text-center"
+          className="rounded-2xl p-3 sm:p-4 border text-center"
           style={{ background: "var(--card)", borderColor: "var(--border)" }}
         >
           <DollarSign size={22} className="mx-auto mb-2" style={{ color: "#EF4444" }} />
@@ -272,7 +272,7 @@ export function AttendanceHistory() {
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
       >
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[720px]">
             <thead>
               <tr
                 style={{

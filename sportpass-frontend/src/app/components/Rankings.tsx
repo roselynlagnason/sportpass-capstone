@@ -230,7 +230,7 @@ export function Rankings({ role }: Props) {
                 No ranking records yet.
               </p>
             ) : (
-              <div className="flex items-end justify-center gap-4">
+              <div className="flex items-end justify-center gap-2 sm:gap-4">
                 {topThree[1] && (
                   <div className="flex flex-col items-center gap-2">
                     <div className="text-3xl">🥈</div>
@@ -249,7 +249,7 @@ export function Rankings({ role }: Props) {
                       </p>
                     </div>
                     <div
-                      className="w-20 h-14 rounded-t-xl flex items-center justify-center text-white/80 font-bold"
+                      className="w-16 sm:w-20 h-14 rounded-t-xl flex items-center justify-center text-white/80 font-bold"
                       style={{ background: "rgba(255,255,255,0.15)" }}
                     >
                       2nd
@@ -261,7 +261,7 @@ export function Rankings({ role }: Props) {
                   <div className="flex flex-col items-center gap-2 -mb-2">
                     <Crown size={22} style={{ color: "#FFD700" }} />
                     <div
-                      className="w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-xl border-4 border-yellow-400"
+                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-white font-bold text-xl border-4 border-yellow-400"
                       style={{ background: "#FFD700" }}
                     >
                       {initials(topThree[0])}
@@ -275,7 +275,7 @@ export function Rankings({ role }: Props) {
                       </p>
                     </div>
                     <div
-                      className="w-24 h-20 rounded-t-xl flex items-center justify-center text-yellow-200 font-bold"
+                      className="w-20 sm:w-24 h-20 rounded-t-xl flex items-center justify-center text-yellow-200 font-bold"
                       style={{ background: "rgba(255,215,0,0.25)" }}
                     >
                       1st 🥇
@@ -301,7 +301,7 @@ export function Rankings({ role }: Props) {
                       </p>
                     </div>
                     <div
-                      className="w-20 h-10 rounded-t-xl flex items-center justify-center text-white/80 font-bold"
+                      className="w-16 sm:w-20 h-10 rounded-t-xl flex items-center justify-center text-white/80 font-bold"
                       style={{ background: "rgba(255,255,255,0.12)" }}
                     >
                       3rd

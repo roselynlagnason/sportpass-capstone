@@ -467,7 +467,7 @@ export function ActivityManagement() {
           style={{ background: "rgba(0,0,0,0.5)" }}
         >
           <div
-            className="w-full max-w-3xl rounded-2xl p-6 shadow-2xl"
+            className="w-full max-w-3xl rounded-2xl p-5 sm:p-6 shadow-2xl max-h-[90dvh] overflow-y-auto"
             style={{ background: "var(--card)" }}
           >
             <div className="flex items-center justify-between mb-5">
@@ -509,7 +509,7 @@ export function ActivityManagement() {
           style={{ background: "rgba(0,0,0,0.5)" }}
         >
           <div
-            className="w-full max-w-lg rounded-2xl p-6 shadow-2xl"
+            className="w-full max-w-lg rounded-2xl p-5 sm:p-6 shadow-2xl max-h-[90dvh] overflow-y-auto"
             style={{ background: "var(--card)" }}
           >
             <div className="flex items-center justify-between mb-5">
@@ -570,7 +570,7 @@ export function ActivityManagement() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="activity-day" className="text-sm font-semibold text-foreground mb-1.5 block">
                     Sportfest Day
@@ -673,7 +673,7 @@ export function ActivityManagement() {
                 />
               </div>
 
-           <div className="grid grid-cols-2 gap-4">
+           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
   {/* Participation Points */}
   <div>

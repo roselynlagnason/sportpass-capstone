@@ -328,11 +328,11 @@ export function PerformanceTracking() {
       </div>
 
       <div
-        className="rounded-2xl border overflow-hidden"
+        className="rounded-2xl border overflow-x-auto"
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
       >
         <div
-          className="grid grid-cols-12 gap-2 px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+          className="grid grid-cols-12 gap-2 min-w-[640px] px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide"
           style={{ background: "var(--muted)" }}
         >
           <div className="col-span-1">Rank</div>
@@ -354,7 +354,7 @@ export function PerformanceTracking() {
             return (
               <div
                 key={s.student_id}
-                className={`grid grid-cols-12 gap-2 px-5 py-4 items-center border-t hover:bg-muted/50 transition-colors ${
+                className={`grid grid-cols-12 gap-2 min-w-[640px] px-5 py-4 items-center border-t hover:bg-muted/50 transition-colors ${
                   selected?.student_id === s.student_id ? "bg-primary/5" : ""
                 }`}
                 style={{ borderColor: "var(--border)" }}
