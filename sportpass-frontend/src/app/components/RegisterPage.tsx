@@ -269,7 +269,7 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
                 <InputField label="Last Name" value={form.lastName} placeholder="e.g. Santos" autoComplete="family-name" error={errors.lastName} onChange={(v) => update("lastName", v)} />
               </div>
 
-              <InputField label="Student ID" value={form.studentId} placeholder="e.g. 2024-00123" inputMode="numeric" maxLength={20} error={errors.studentId} onChange={(v) => update("studentId", v)} />
+              <InputField label="Student ID" value={form.studentId} placeholder="e.g. 202611016" inputMode="numeric" maxLength={20} error={errors.studentId} onChange={(v) => update("studentId", v)} />
               <InputField label="Email Address" value={form.email} type="email" placeholder="e.g. maria.santos@gmail.com" autoComplete="email" inputMode="email" error={errors.email} onChange={(v) => update("email", v)} />
               <InputField
                   label="Contact Number"
