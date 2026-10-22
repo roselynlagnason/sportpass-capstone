@@ -110,6 +110,22 @@ Runner-Up), students at or above the High Performer threshold are High
 Performers, and anyone with points is an Active Participant. Both numbers are
 set on the Settings page.
 
+**Offline-first scanning.** Scanning keeps working without internet. When a
+phone is offline (or the connection drops during a scan), the scan is saved on
+the phone with the time it was scanned and a unique scan id, and a bar at the
+top of the page shows how many scans are waiting. When the connection returns,
+the saved scans are sent automatically, oldest first (also every 30 seconds
+and with a "Sync now" button). The server checks each QR code as of the time
+it was scanned, records time-in/time-out and points at that time, and uses the
+scan id (`offline_scans` table) so a scan sent twice is only recorded once.
+Saved scans must be synced within 48 hours. A student's points scan that
+arrives before the officer's time-in has synced waits and is retried. After
+one online visit the website itself also opens offline (`public/sw.js`), the
+attendance scanner uses the last saved list of sportfest days, and the
+student's QR page shows an offline QR that works until the end of that day.
+Code: `sportpass-frontend/src/app/lib/offlineQueue.ts`,
+`sportpass-backend/lib/offlineScans.js`.
+
 **Settings.** Stored in the `system_settings` table: event details, default
 points, fine amount, reward thresholds, QR lifetimes, the minimum time before
 time-out, and automatic activity notifications.

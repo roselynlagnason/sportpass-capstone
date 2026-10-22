@@ -9,6 +9,7 @@ const {
   attendanceFineAmount,
 } = require("../lib/fines");
 const settings = require("../lib/settings");
+const { offlineScan, verifyOptionsFor } = require("../lib/offlineScans");
 
 const router = express.Router();
 
@@ -247,8 +248,11 @@ router.get("/day/:day_id", requireAdmin, (req, res) => {
 
 /* ADMIN (officers): scan a student's QR code on a sportfest day.
  * First scan = time-in, second = time-out. */
-router.post("/scan", requireAdmin, (req, res) => {
+router.post("/scan", requireAdmin, offlineScan("attendance"), (req, res) => {
   const { token, day_id } = req.body;
+  // Saved offline: use the time it was scanned, not the time it arrived.
+  const scan = req.scan;
+  const scanTime = scan.offline ? scan.at : null;
 
   if (!token || !day_id) {
     return res.status(400).json({ message: "Missing QR token or sportfest day." });
@@ -256,10 +260,12 @@ router.post("/scan", requireAdmin, (req, res) => {
 
   let decoded;
   try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = jwt.verify(token, process.env.JWT_SECRET, verifyOptionsFor(scan));
   } catch {
     return res.status(400).json({
-      message: "QR code expired or invalid. Ask the student to refresh their QR.",
+      message: scan.offline
+        ? "This saved scan's QR code had already expired when it was scanned."
+        : "QR code expired or invalid. Ask the student to refresh their QR.",
     });
   }
 
@@ -271,8 +277,8 @@ router.post("/scan", requireAdmin, (req, res) => {
   const name = decoded.full_name || student_id;
 
   db.query(
-    "SELECT sportfest_date = CURDATE() AS is_today, status FROM sportfest_days WHERE day_id = ?",
-    [day_id],
+    "SELECT sportfest_date = DATE(COALESCE(?, NOW())) AS is_today, status FROM sportfest_days WHERE day_id = ?",
+    [scanTime, day_id],
     (dayErr, days) => {
       if (dayErr) return res.status(500).json({ message: "Database error." });
       if (days.length === 0) return res.status(404).json({ message: "Sportfest day not found." });
@@ -281,22 +287,24 @@ router.post("/scan", requireAdmin, (req, res) => {
           message: "Attendance can only be scanned on the sportfest day itself.",
         });
       }
-      if (days[0].status === "closed") {
+      // A scan saved offline while the day was open still counts if the day
+      // was closed before the phone got back online.
+      if (days[0].status === "closed" && !scan.offline) {
         return res.status(400).json({ message: "This sportfest day is closed." });
       }
 
       db.query(
         `SELECT attendance_id, time_in, time_out,
-                TIMESTAMPDIFF(SECOND, time_in, NOW()) AS seconds_since_time_in
+                TIMESTAMPDIFF(SECOND, time_in, COALESCE(?, NOW())) AS seconds_since_time_in
          FROM daily_attendance WHERE student_id = ? AND day_id = ?`,
-        [student_id, day_id],
+        [scanTime, student_id, day_id],
         (err, rows) => {
           if (err) return res.status(500).json({ message: "Database error." });
 
           if (rows.length === 0) {
             return db.query(
-              "INSERT INTO daily_attendance (student_id, day_id, time_in) VALUES (?, ?, NOW())",
-              [student_id, day_id],
+              "INSERT INTO daily_attendance (student_id, day_id, time_in) VALUES (?, ?, COALESCE(?, NOW()))",
+              [student_id, day_id, scanTime],
               (insertErr) => {
                 if (insertErr) {
                   if (insertErr.code === "ER_DUP_ENTRY") {
@@ -320,6 +328,12 @@ router.post("/scan", requireAdmin, (req, res) => {
 
           // Refuse a time-out that comes too soon after time-in, so scanning
           // the same student twice by accident doesn't end their day.
+          if (record.seconds_since_time_in !== null && record.seconds_since_time_in < 0) {
+            return res.status(400).json({
+              message: `${name}'s saved scan is earlier than the time-in already recorded, so it was skipped.`,
+            });
+          }
+
           const minMinutes = Number(settings.get("min_minutes_before_time_out")) || 0;
           if (
             record.seconds_since_time_in !== null &&
@@ -331,8 +345,8 @@ router.post("/scan", requireAdmin, (req, res) => {
           }
 
           db.query(
-            "UPDATE daily_attendance SET time_out = NOW() WHERE attendance_id = ?",
-            [record.attendance_id],
+            "UPDATE daily_attendance SET time_out = COALESCE(?, NOW()) WHERE attendance_id = ?",
+            [scanTime, record.attendance_id],
             (updateErr) => {
               if (updateErr) return res.status(500).json({ message: "Failed to record time-out." });
               res.json({ action: "time_out", message: "Time-out recorded successfully.", student_id, full_name: decoded.full_name });

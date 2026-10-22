@@ -10,9 +10,11 @@ import {
   AlertCircle,
   RefreshCw,
   Camera,
+  CloudOff,
 } from "lucide-react";
 
 import { startCameraScanner, cameraErrorMessage, type CameraScanner } from "../lib/qrScanner";
+import { saveScan, shouldSave } from "../lib/offlineQueue";
 import { apiFetch } from "../lib/api";
 
 
@@ -37,7 +39,7 @@ export function StudentActivities() {
   const [search, setSearch] = useState("");
   
   const [message, setMessage] = useState("");
-  const [status, setStatus] = useState<"success" | "error" | "">("");
+  const [status, setStatus] = useState<"success" | "saved" | "error" | "">("");
   const [scanning, setScanning] = useState(true);
   const scannerRef = useRef<CameraScanner | null>(null);
   const scanLocked = useRef(false);
@@ -116,14 +118,24 @@ export function StudentActivities() {
           await stopScanner();
           setScanning(false);
 
+          // No internet (or older saved scans still waiting): keep the scan
+          // on this phone; points are added when it syncs.
+          const saveOnDevice = () => {
+            const saved = saveScan("participation", { token: decodedText }, "SPORTPASS_ACTIVITY_QR");
+            setStatus(saved.ok ? "saved" : "error");
+            setMessage(saved.message);
+          };
+
+          if (shouldSave("participation")) {
+            saveOnDevice();
+            return;
+          }
+
           try {
             const response = await apiFetch("/api/participation/scan", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                token: decodedText,
-                student_id: user.student_id,
-              }),
+              body: JSON.stringify({ token: decodedText }),
             });
 
             const data = await response.json();
@@ -138,8 +150,8 @@ export function StudentActivities() {
             setMessage(data.message);
             await fetchActivities();
           } catch {
-            setStatus("error");
-            setMessage("Cannot connect to server.");
+            // The connection dropped: save the scan instead of losing it.
+            saveOnDevice();
           }
         }
       );
@@ -223,14 +235,16 @@ export function StudentActivities() {
           </div>
         ) : (
           <div className="text-center py-8">
-            {status === "success" ? (
+            {status === "saved" ? (
+              <CloudOff size={56} className="mx-auto mb-4" style={{ color: "#D97706" }} />
+            ) : status === "success" ? (
               <CheckCircle size={56} className="mx-auto mb-4" style={{ color: "#10B981" }} />
             ) : (
               <AlertCircle size={56} className="mx-auto mb-4" style={{ color: "#EF4444" }} />
             )}
 
             <h3 className="font-heading font-bold text-foreground text-lg">
-              {status === "success" ? "Scan Successful" : "Scan Failed"}
+              {status === "saved" ? "Saved on This Phone" : status === "success" ? "Scan Successful" : "Scan Failed"}
             </h3>
 
             <p className="text-sm text-muted-foreground mt-2">{message}</p>

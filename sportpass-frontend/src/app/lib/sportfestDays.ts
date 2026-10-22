@@ -14,11 +14,37 @@ export type SportfestDay = {
   activities: number;
 };
 
+const DAYS_CACHE_KEY = "sportpass_days_cache";
+
+// Loads the sportfest days. The last list is kept on the device so the
+// attendance scanner still opens when there's no internet.
 export async function loadDays(): Promise<SportfestDay[]> {
-  const response = await apiFetch("/api/attendance/days");
+  let response: Response;
+  try {
+    response = await apiFetch("/api/attendance/days");
+  } catch (err) {
+    const cached = cachedDays();
+    if (cached) return cached;
+    throw err;
+  }
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || "Failed to load sportfest days.");
-  return Array.isArray(data) ? data : [];
+  const list = Array.isArray(data) ? data : [];
+  try {
+    localStorage.setItem(DAYS_CACHE_KEY, JSON.stringify(list));
+  } catch {
+    /* storage unavailable */
+  }
+  return list;
+}
+
+export function cachedDays(): SportfestDay[] | null {
+  try {
+    const raw = localStorage.getItem(DAYS_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as SportfestDay[]) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function dayWhen(day: SportfestDay): "today" | "upcoming" | "past" {

@@ -216,3 +216,17 @@ CREATE TABLE IF NOT EXISTS system_settings (
   setting_value  TEXT        NOT NULL,
   updated_at     TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+
+-- Scans that were saved on a phone while offline and synced later
+-- (see lib/offlineScans.js). client_id is the phone's id for one scan, so
+-- sending the same saved scan twice never records it twice.
+CREATE TABLE IF NOT EXISTS offline_scans (
+  client_id    VARCHAR(64) NOT NULL PRIMARY KEY,
+  kind         VARCHAR(20) NOT NULL,
+  user_id      INT         NULL,
+  status_code  SMALLINT    NOT NULL,
+  response     TEXT        NOT NULL,
+  scanned_at   DATETIME    NOT NULL,
+  synced_at    TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_offline_scans_synced (synced_at)
+) ENGINE=InnoDB;

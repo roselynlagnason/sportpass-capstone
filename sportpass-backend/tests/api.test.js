@@ -30,6 +30,7 @@ const fakeDb = {
     let rows = [];
     if (/SELECT photo_data, photo_type FROM students/.test(sql)) { rows = scenario.photo ? [{ photo_data: Buffer.from([137, 80, 78, 71]), photo_type: 'image/png' }] : []; return setImmediate(() => cb(null, rows)); }
     if (/SELECT day_id FROM sportfest_days WHERE sportfest_date/.test(sql)) { rows = scenario.isDay ? [{ day_id: 3 }] : []; return setImmediate(() => cb(null, rows)); }
+    if (/FROM offline_scans WHERE client_id/.test(sql)) { rows = scenario.seen ? [{ status_code: 200, response: JSON.stringify({ action: "time_in", message: "Time-in recorded successfully." }) }] : []; return setImmediate(() => cb(null, rows)); }
     if (/information_schema/.test(sql)) rows = [{ n: 1 }];
     else if (/AS records/.test(sql)) rows = [{ records: scenario.records ?? 0 }];
     else if (/AS is_past/.test(sql)) rows = [{ is_past: scenario.past ? 1 : 0 }];
@@ -128,6 +129,49 @@ expectStatus("officers only can scan attendance", "POST", "/api/attendance/scan"
 expectStatus("no attendance scanning outside the sportfest day", "POST", "/api/attendance/scan", admin, { token: studentQR, day_id: 3 }, 400, { today: 0 });
 expectStatus("time-in on the sportfest day", "POST", "/api/attendance/scan", admin, { token: studentQR, day_id: 3 }, 200, { today: 1 });
 expectStatus("second scan too soon is refused", "POST", "/api/attendance/scan", admin, { token: studentQR, day_id: 3 }, 400, { today: 1, existing: true });
+
+// ---- offline-first sync (scans saved on the phone, sent later) ------------
+const nowSec = Math.floor(Date.now() / 1000);
+// A student QR that was valid 10 minutes ago and has expired since.
+const oldStudentQR = jwt.sign({ type: "SPORTPASS_ATTENDANCE_QR", student_id: "S1", full_name: "Ana Cruz", iat: nowSec - 600, exp: nowSec - 300 }, S);
+const oldActivityQR = jwt.sign({ type: "SPORTPASS_ACTIVITY_QR", activity_id: 7, qr_type: "participation", iat: nowSec - 600, exp: nowSec - 480 }, S);
+const ago = (sec) => new Date(Date.now() - sec * 1000).toISOString();
+const cid = (n) => `scan-test-${n}-${Date.now()}`;
+
+expectStatus("live scan of an expired QR is refused", "POST", "/api/attendance/scan", admin, { token: oldStudentQR, day_id: 3 }, 400, { today: 1 });
+test("offline scan made while the QR was valid is accepted with the scan time", async () => {
+  scenario = { today: 1 };
+  queries.length = 0;
+  const scannedAt = ago(500);
+  const r = await call("POST", "/api/attendance/scan", admin, { token: oldStudentQR, day_id: 3, scanned_at: scannedAt, client_id: cid(1) });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.offline, true);
+  const insert = queries.find((q) => /INSERT INTO daily_attendance/.test(q.sql));
+  assert.ok(insert, "time-in was recorded");
+  assert.equal(new Date(insert.params[2]).toISOString(), scannedAt, "time-in uses the scan time");
+  assert.ok(queries.some((q) => /INSERT IGNORE INTO offline_scans/.test(q.sql)), "scan id remembered");
+});
+expectStatus("offline scan made after the QR expired is refused", "POST", "/api/attendance/scan", admin, { token: oldStudentQR, day_id: 3, scanned_at: ago(200), client_id: cid(2) }, 400, { today: 1 });
+expectStatus("offline scans older than 48 hours are refused", "POST", "/api/attendance/scan", admin, { token: studentQR, day_id: 3, scanned_at: ago(49 * 3600), client_id: cid(3) }, 400, { today: 1 });
+expectStatus("offline scans with a future time are refused", "POST", "/api/attendance/scan", admin, { token: studentQR, day_id: 3, scanned_at: ago(-3600), client_id: cid(4) }, 400, { today: 1 });
+expectStatus("offline scans need a scan id", "POST", "/api/attendance/scan", admin, { token: studentQR, day_id: 3, scanned_at: ago(10) }, 400, { today: 1 });
+test("sending the same saved scan twice records it once", async () => {
+  scenario = { today: 1, seen: true };
+  queries.length = 0;
+  const r = await call("POST", "/api/attendance/scan", admin, { token: oldStudentQR, day_id: 3, scanned_at: ago(500), client_id: cid(5) });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.duplicate, true);
+  assert.ok(!queries.some((q) => /daily_attendance/.test(q.sql)), "nothing recorded again");
+});
+test("offline points wait (retry) until the time-in has synced", async () => {
+  scenario = { timedIn: false };
+  queries.length = 0;
+  const r = await call("POST", "/api/participation/scan", student, { token: oldActivityQR, scanned_at: ago(500), client_id: cid(6) });
+  assert.equal(r.status, 409, JSON.stringify(r.json));
+  assert.equal(r.json.retry, true);
+  assert.ok(!queries.some((q) => /INSERT IGNORE INTO offline_scans/.test(q.sql)), "retry answers are not remembered");
+});
+expectStatus("offline points are added once timed in", "POST", "/api/participation/scan", student, { token: oldActivityQR, scanned_at: ago(500), client_id: cid(7) }, 200, { timedIn: true });
 
 // ---- sportfest days ----------------------------------------------------------
 expectStatus("student can't add a sportfest day", "POST", "/api/attendance/days", student, { sportfest_date: "2030-01-15" }, 403);

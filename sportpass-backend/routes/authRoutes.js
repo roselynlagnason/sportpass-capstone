@@ -494,9 +494,28 @@ router.post("/student-qr-token", requireAuth, requireStudent, (req, res) => {
         { expiresIn: STUDENT_QR_TTL_SECONDS }
       );
 
+      // Offline pass: the phone keeps this one and shows it if it loses
+      // internet. It works until the end of today only.
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 0);
+      const offlineToken = jwt.sign(
+        {
+          type: "SPORTPASS_ATTENDANCE_QR",
+          user_id,
+          student_id,
+          full_name,
+          purpose: "attendance",
+          offline_pass: true,
+          exp: Math.floor(endOfToday.getTime() / 1000),
+        },
+        process.env.JWT_SECRET
+      );
+
       res.json({
         token: qrToken,
         expires_in: STUDENT_QR_TTL_SECONDS,
+        offline_token: offlineToken,
+        offline_expires_at: endOfToday.toISOString(),
       });
     }
   );

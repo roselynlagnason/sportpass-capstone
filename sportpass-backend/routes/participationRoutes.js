@@ -2,22 +2,26 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const db = require("../db");
 const { requireStudent, selfOrAdmin } = require("../middleware/auth");
+const { offlineScan, verifyOptionsFor } = require("../lib/offlineScans");
 
 const router = express.Router();
 
 // A student scans the activity's QR. The student is always the logged-in
 // user (any student_id in the body is ignored), and points are only given
 // to students who were timed in to that activity by an officer.
-router.post("/scan", requireStudent, (req, res) => {
+router.post("/scan", requireStudent, offlineScan("participation"), (req, res) => {
   const { token } = req.body;
   const student_id = req.user.student_id;
+  // Saved offline: use the time it was scanned, not the time it arrived.
+  const scan = req.scan;
+  const scanTime = scan.offline ? scan.at : null;
 
   if (!token) {
     return res.status(400).json({ message: "Missing QR data" });
   }
 
   try {
-    const qrData = jwt.verify(token, process.env.JWT_SECRET);
+    const qrData = jwt.verify(token, process.env.JWT_SECRET, verifyOptionsFor(scan));
 
     if (qrData.type !== "SPORTPASS_ACTIVITY_QR") {
       return res.status(400).json({ message: "Invalid activity QR" });
@@ -64,6 +68,15 @@ router.post("/scan", requireStudent, (req, res) => {
       }
 
       if (attRows.length === 0) {
+        // Saved offline: the officer's time-in may still be waiting on their
+        // phone, so let the student's phone try again later.
+        if (scan.offline) {
+          return res.status(409).json({
+            retry: true,
+            message:
+              "Waiting for your time-in to reach the server. This scan will be sent again automatically.",
+          });
+        }
         return res.status(403).json({
           message:
             "You need to be timed in for today's sportfest before you can earn points. Ask an officer to scan your QR code.",
@@ -97,7 +110,7 @@ router.post("/scan", requireStudent, (req, res) => {
               participated_at,
               accomplished_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+            VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, NOW()), COALESCE(?, NOW()))
           `;
 
           db.query(
@@ -109,6 +122,8 @@ router.post("/scan", requireStudent, (req, res) => {
               isParticipation ? activity.participation_points : 0,
               isParticipation ? "not_accomplished" : "accomplished",
               isParticipation ? 0 : activity.accomplishment_points,
+              scanTime,
+              scanTime,
             ],
             (insertErr) => {
               if (insertErr) {
@@ -139,14 +154,14 @@ router.post("/scan", requireStudent, (req, res) => {
               UPDATE participation_records
               SET participation_status = 'participated',
                   participation_points = ?,
-                  participated_at = NOW()
+                  participated_at = COALESCE(?, NOW())
               WHERE student_id = ? AND activity_id = ?
             `
             : `
               UPDATE participation_records
               SET accomplishment_status = 'accomplished',
                   accomplishment_points = ?,
-                  accomplished_at = NOW()
+                  accomplished_at = COALESCE(?, NOW())
               WHERE student_id = ? AND activity_id = ?
             `;
 
@@ -154,7 +169,7 @@ router.post("/scan", requireStudent, (req, res) => {
             ? activity.participation_points
             : activity.accomplishment_points;
 
-          db.query(updateSql, [points, student_id, activity_id], (updateErr) => {
+          db.query(updateSql, [points, scanTime, student_id, activity_id], (updateErr) => {
             if (updateErr) {
               console.error(updateErr);
               return res.status(500).json({ message: "Update failed" });
@@ -172,7 +187,9 @@ router.post("/scan", requireStudent, (req, res) => {
     });
   } catch (err) {
     return res.status(400).json({
-      message: "Invalid or expired QR code. Ask the officer to show the current code.",
+      message: req.scan && req.scan.offline
+        ? "This saved scan's QR code had already expired when it was scanned."
+        : "Invalid or expired QR code. Ask the officer to show the current code.",
     });
   }
 });

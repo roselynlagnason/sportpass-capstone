@@ -120,6 +120,21 @@ const STEPS = [
               ADD COLUMN photo_type VARCHAR(30) NULL AFTER photo_data`,
   },
   {
+    name: "offline_scans table (offline-first sync)",
+    check: `SELECT COUNT(*) AS n FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'offline_scans'`,
+    apply: `CREATE TABLE offline_scans (
+              client_id VARCHAR(64) NOT NULL PRIMARY KEY,
+              kind VARCHAR(20) NOT NULL,
+              user_id INT NULL,
+              status_code SMALLINT NOT NULL,
+              response TEXT NOT NULL,
+              scanned_at DATETIME NOT NULL,
+              synced_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              KEY idx_offline_scans_synced (synced_at)
+            ) ENGINE=InnoDB`,
+  },
+  {
     name: "BSIT as every student's course",
     check: `SELECT COUNT(*) = 0 AS n FROM students WHERE course IS NULL OR course <> 'BSIT'`,
     apply: `UPDATE students SET course = 'BSIT' WHERE course IS NULL OR course <> 'BSIT'`,

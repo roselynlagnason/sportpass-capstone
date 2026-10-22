@@ -11,8 +11,10 @@ import {
   AlertTriangle,
   Camera,
   RefreshCw,
+  CloudOff,
 } from "lucide-react";
 import { apiFetch } from "../lib/api";
+import { saveScan, shouldSave } from "../lib/offlineQueue";
 import { SportfestDayPicker } from "./SportfestDayPicker";
 import {
   dayCanScan,
@@ -85,7 +87,7 @@ export function Attendance({ setScreen }: { setScreen?: (screen: any) => void })
 
   const [showScanner, setShowScanner] = useState(false);
   const [scanMessage, setScanMessage] = useState("");
-  const [scanStatus, setScanStatus] = useState<"success" | "error" | "">("");
+  const [scanStatus, setScanStatus] = useState<"success" | "saved" | "error" | "">("");
   const [scannedName, setScannedName] = useState("");
 
   const scannerRef = useRef<CameraScanner | null>(null);
@@ -157,16 +159,28 @@ export function Attendance({ setScreen }: { setScreen?: (screen: any) => void })
 
         scannerRef.current?.clear().catch(() => {});
 
+        // No internet (or older saved scans still waiting): keep the scan
+        // on this device; it syncs automatically later.
+        const payload = { token: decodedText, day_id: selectedDay };
+        const saveOnDevice = () => {
+          const saved = saveScan("attendance", payload, "SPORTPASS_ATTENDANCE_QR");
+          setScanStatus(saved.ok ? "saved" : "error");
+          setScannedName(saved.label);
+          setScanMessage(saved.message);
+        };
+
+        if (shouldSave("attendance")) {
+          saveOnDevice();
+          return;
+        }
+
         try {
           const response = await apiFetch("/api/attendance/scan", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              token: decodedText,
-              day_id: selectedDay,
-            }),
+            body: JSON.stringify(payload),
           });
 
           const data = await response.json();
@@ -184,8 +198,8 @@ export function Attendance({ setScreen }: { setScreen?: (screen: any) => void })
           fetchAttendance(selectedDay);
           fetchDays();
         } catch {
-          setScanStatus("error");
-          setScanMessage("Cannot connect to server.");
+          // The connection dropped: save the scan instead of losing it.
+          saveOnDevice();
         }
       }
       );
@@ -787,10 +801,16 @@ const totalOutstanding = totalIssued - totalPaid;
                 className="mt-4 p-3 rounded-xl"
                 style={{
                   background:
-                    scanStatus === "success" ? "#10B98118" : "#EF444418",
+                    scanStatus === "success" ? "#10B98118" : scanStatus === "saved" ? "#F59E0B18" : "#EF444418",
                 }}
               >
-                {scanStatus === "success" ? (
+                {scanStatus === "saved" ? (
+                  <CloudOff
+                    size={34}
+                    className="mx-auto mb-2"
+                    style={{ color: "#D97706" }}
+                  />
+                ) : scanStatus === "success" ? (
                   <CheckCircle
                     size={34}
                     className="mx-auto mb-2"
@@ -813,7 +833,7 @@ const totalOutstanding = totalIssued - totalPaid;
                 <p
                   className="text-xs font-semibold"
                   style={{
-                    color: scanStatus === "success" ? "#10B981" : "#EF4444",
+                    color: scanStatus === "success" ? "#10B981" : scanStatus === "saved" ? "#B45309" : "#EF4444",
                   }}
                 >
                   {scanMessage}

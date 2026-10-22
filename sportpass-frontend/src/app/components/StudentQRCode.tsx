@@ -92,26 +92,51 @@ useEffect(() => {
   const [qrValue, setQrValue] = useState("");
 const [secondsLeft, setSecondsLeft] = useState(30);
 
+const [offlineUntil, setOfflineUntil] = useState<string | null>(null);
+const offlineKey = (u: LoggedUser) => `sportpass_offline_qr_${u.student_id || u.user_id}`;
+
+// Shows a fresh QR from the server. Without internet, shows the offline
+// pass saved on the last visit (valid until the end of that day).
 const generateQRToken = async (studentUser: LoggedUser) => {
-  const response = await apiFetch("/api/auth/student-qr-token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      user_id: studentUser.user_id,
-      student_id: studentUser.student_id,
-      full_name:
-        studentUser.full_name ||
-        `${studentUser.first_name || ""} ${studentUser.last_name || ""}`.trim(),
-    }),
-  });
+  try {
+    const response = await apiFetch("/api/auth/student-qr-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
 
-  const data = await response.json();
+    const data = await response.json();
 
-  if (response.ok) {
-    setQrValue(data.token);
-    setSecondsLeft(data.expires_in);
+    if (response.ok) {
+      setQrValue(data.token);
+      setSecondsLeft(data.expires_in);
+      setOfflineUntil(null);
+      if (data.offline_token) {
+        try {
+          localStorage.setItem(
+            offlineKey(studentUser),
+            JSON.stringify({ token: data.offline_token, until: data.offline_expires_at })
+          );
+        } catch {
+          /* storage unavailable */
+        }
+      }
+    }
+  } catch {
+    let saved: { token: string; until: string } | null = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(offlineKey(studentUser)) || "null");
+    } catch {
+      saved = null;
+    }
+    if (saved && new Date(saved.until).getTime() > Date.now()) {
+      setQrValue(saved.token);
+      setOfflineUntil(saved.until);
+    } else {
+      setQrValue("");
+      setOfflineUntil("none");
+    }
+    setSecondsLeft(30); // check for internet again soon
   }
 };
 
@@ -166,7 +191,8 @@ const generateQRToken = async (studentUser: LoggedUser) => {
                 style={{ borderColor: "var(--primary)" }}
               >
                 <QRCodeCanvas
-                  value={qrValue}
+                  value={qrValue || "SPORTPASS"}
+                  style={{ width: "100%", height: "100%", opacity: qrValue ? 1 : 0.1 }}
                   size={200}
                   level="H"
                   includeMargin={false}
@@ -176,9 +202,19 @@ const generateQRToken = async (studentUser: LoggedUser) => {
               <p className="text-center text-xs text-muted-foreground mt-2">
                 Scan for attendance
               </p>
-              <p className="text-center text-xs font-semibold mt-1" style={{ color: "#EF4444" }}>
-                Expires in {secondsLeft}s
-              </p>
+              {offlineUntil === null ? (
+                <p className="text-center text-xs font-semibold mt-1" style={{ color: "#EF4444" }}>
+                  Expires in {secondsLeft}s
+                </p>
+              ) : offlineUntil === "none" ? (
+                <p className="text-center text-xs font-semibold mt-1 max-w-44" style={{ color: "#B45309" }}>
+                  You're offline. Open this page once while online to get an offline QR.
+                </p>
+              ) : (
+                <p className="text-center text-xs font-semibold mt-1 max-w-44" style={{ color: "#B45309" }}>
+                  Offline QR · valid until 11:59 PM today
+                </p>
+              )}
 
             </div>
             

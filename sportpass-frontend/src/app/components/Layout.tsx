@@ -6,6 +6,8 @@ import {
   ChevronRight, Shield, GraduationCap, History, ScanLine, TrendingUp, CalendarDays
 } from "lucide-react";
 import { API_BASE, apiFetch } from "../lib/api";
+import { startAutoSync } from "../lib/offlineQueue";
+import { SyncStatus } from "./SyncStatus";
 
 export type Screen =
   | "login" | "register"
@@ -78,6 +80,9 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
     const savedUser = localStorage.getItem("user");
     if (savedUser) setUser(JSON.parse(savedUser));
   }, []);
+
+  // Send scans saved offline as soon as there's a connection.
+  useEffect(() => startAutoSync(), []);
 
   // Students: count unread notifications for the bell badge.
   useEffect(() => {
@@ -250,6 +255,8 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
             </button>
           </div>
         </header>
+
+        <SyncStatus />
 
         <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6">
           {children}
