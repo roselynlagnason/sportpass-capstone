@@ -3,6 +3,17 @@ require("dotenv").config();
 // Cloud servers run on UTC otherwise.
 process.env.TZ = process.env.APP_TIMEZONE || "Asia/Manila";
 
+// Logins and QR codes are signed with JWT_SECRET; without it every login
+// fails. Stop here with a clear message instead.
+if (!process.env.JWT_SECRET) {
+  console.error(
+    "JWT_SECRET is not set. Add it to sportpass-backend/.env (or the hosting\n" +
+      "service's environment variables). Make one with:\n" +
+      "  node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\""
+  );
+  process.exit(1);
+}
+
 const express = require("express");
 const cors = require("cors");
 const { requireAuth } = require("./middleware/auth");

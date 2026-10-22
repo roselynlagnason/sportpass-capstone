@@ -3,7 +3,12 @@ node_modules/
 
 # Secrets — never commit; share .env.example instead
 .env
-.env.local
+.env.*
+!.env.example
+
+# Database certificates and notes copied from Aiven
+*.pem
+certificate.txt
 
 # Build output
 dist/
