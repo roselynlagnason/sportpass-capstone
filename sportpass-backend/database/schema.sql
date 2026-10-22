@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS students (
   last_name      VARCHAR(100) NOT NULL,
   contact        VARCHAR(30)  NULL,
   department     VARCHAR(100) NOT NULL DEFAULT 'Computer Studies Department',
-  course         VARCHAR(20)  NULL,
+  course         VARCHAR(20)  NOT NULL DEFAULT 'BSIT',
   year_level     VARCHAR(20)  NOT NULL,
   gender         VARCHAR(20)  NULL,
   section        VARCHAR(20)  NULL,

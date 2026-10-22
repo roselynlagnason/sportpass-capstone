@@ -25,8 +25,10 @@ router.post("/register", upload.singlePhoto("profile_photo"), async (req, res) =
     gender,
     section,
     contact,
-    course,
   } = req.body;
+
+  // SPORTPASS is for BSIT students only.
+  const course = "BSIT";
 
   const profile_photo = req.file ? upload.photoName(req.file) : null;
   const photo_data = req.file ? req.file.buffer : null;
@@ -241,7 +243,7 @@ router.get("/students", requireAuth, requireAdmin, (req, res) => {
 /* ADMIN: Edit a student's details (not the student ID or password). */
 router.put("/students/:student_id", requireAuth, requireAdmin, (req, res) => {
   const { student_id } = req.params;
-  const { first_name, last_name, email, contact, course, year_level, gender, section } =
+  const { first_name, last_name, email, contact, year_level, gender, section } =
     req.body;
 
   if (!first_name || !last_name || !email || !year_level) {
@@ -257,7 +259,6 @@ router.put("/students/:student_id", requireAuth, requireAdmin, (req, res) => {
       s.first_name = ?,
       s.last_name = ?,
       s.contact = ?,
-      s.course = ?,
       s.year_level = ?,
       s.gender = ?,
       s.section = ?,
@@ -271,7 +272,6 @@ router.put("/students/:student_id", requireAuth, requireAdmin, (req, res) => {
       first_name.trim(),
       last_name.trim(),
       contact || null,
-      course || null,
       year_level,
       gender || null,
       section || null,

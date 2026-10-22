@@ -45,7 +45,6 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
     lastName: "",
     studentId: "",
     email: "",
-    course: "",
     year: "",
     gender: "",
     section: "",
@@ -64,7 +63,6 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
       !form.lastName ||
       !form.studentId ||
       !form.email ||
-      !form.course ||
       !form.year ||
       !form.password ||
       !form.confirmPassword
@@ -97,7 +95,6 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
       formData.append("last_name", form.lastName);
       formData.append("email", form.email);
       formData.append("password", form.password);
-      formData.append("course", form.course);
       formData.append("year_level", form.year);
       formData.append("gender", form.gender);
       formData.append("section", form.section);
@@ -263,22 +260,17 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
               </div>
 
               <div>
-                <label htmlFor="register-course" className="text-sm font-semibold text-foreground mb-1.5 block">Course</label>
-                <select
-                  id="register-course"
-                  value={form.course}
-                  onChange={(e) => update("course", e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none"
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">Course</label>
+                <input
+                  value="BS Information Technology (BSIT)"
+                  disabled
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none opacity-80"
                   style={{
                     background: "var(--input-background)",
                     borderColor: "var(--border)",
                     color: "var(--foreground)",
                   }}
-                >
-                  <option value="">Select Course</option>
-                  <option value="BSIT">BS Information Technology (BSIT)</option>
-                  <option value="BSCS">BS Computer Science (BSCS)</option>
-                </select>
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

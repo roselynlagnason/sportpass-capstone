@@ -617,21 +617,6 @@ export function StudentManagement() {
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="edit-course" className="text-sm font-semibold text-foreground mb-1.5 block">Course</label>
-                <select
-                  id="edit-course"
-                  value={editForm.course}
-                  onChange={(e) => setEditForm({ ...editForm, course: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none"
-                  style={{ background: "var(--input-background)", borderColor: "var(--border)", color: "var(--foreground)" }}
-                >
-                  <option value="">Not set</option>
-                  <option value="BSIT">BSIT</option>
-                  <option value="BSCS">BSCS</option>
-                </select>
-              </div>
-
               <div className="rounded-xl p-3 border" style={{ borderColor: "var(--border)" }}>
                 <div className="flex items-center justify-between gap-3">
                   <div>

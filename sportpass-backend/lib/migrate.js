@@ -119,6 +119,11 @@ const STEPS = [
               ADD COLUMN photo_data MEDIUMBLOB NULL AFTER profile_photo,
               ADD COLUMN photo_type VARCHAR(30) NULL AFTER photo_data`,
   },
+  {
+    name: "BSIT as every student's course",
+    check: `SELECT COUNT(*) = 0 AS n FROM students WHERE course IS NULL OR course <> 'BSIT'`,
+    apply: `UPDATE students SET course = 'BSIT' WHERE course IS NULL OR course <> 'BSIT'`,
+  },
 ];
 
 function migrate(db, done = () => {}) {
@@ -131,7 +136,7 @@ function migrate(db, done = () => {}) {
         console.log(`Database update skipped (${step.name}): ${err.message}`);
         return next();
       }
-      if (Number(rows[0].n) > 0) return next();
+      if (!rows || !rows[0] || Number(rows[0].n) > 0) return next();
       const apply = (cb) =>
         typeof step.apply === "function" ? step.apply(db, cb) : db.query(step.apply, cb);
       apply((applyErr) => {
