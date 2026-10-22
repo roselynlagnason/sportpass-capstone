@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { startCameraScanner, cameraErrorMessage, type CameraScanner } from "../lib/qrScanner";
 import {
   QrCode,
   Search,
@@ -88,7 +88,7 @@ export function Attendance({ setScreen }: { setScreen?: (screen: any) => void })
   const [scanStatus, setScanStatus] = useState<"success" | "error" | "">("");
   const [scannedName, setScannedName] = useState("");
 
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<CameraScanner | null>(null);
   const scanLocked = useRef(false);
 
   const fetchDays = async () => {
@@ -149,25 +149,13 @@ export function Attendance({ setScreen }: { setScreen?: (screen: any) => void })
   try {
     scannerRef.current?.clear().catch(() => {});
 
-    const scanner = new Html5QrcodeScanner(
-      "attendance-reader",
-      {
-        fps: 10,
-        qrbox: { width: 300, height: 300 },
-        rememberLastUsedCamera: true,
-        supportedScanTypes: [],
-      },
-      false
-    );
-
-    scannerRef.current = scanner;
-
-    scanner.render(
+    scannerRef.current = await startCameraScanner(
+        "attendance-reader",
       async (decodedText) => {
         if (scanLocked.current) return;
         scanLocked.current = true;
 
-        scanner.clear().catch(() => {});
+        scannerRef.current?.clear().catch(() => {});
 
         try {
           const response = await apiFetch("/api/attendance/scan", {
@@ -199,12 +187,11 @@ export function Attendance({ setScreen }: { setScreen?: (screen: any) => void })
           setScanStatus("error");
           setScanMessage("Cannot connect to server.");
         }
-      },
-      () => {}
-    );
-  } catch {
+      }
+      );
+  } catch (cameraError) {
     setScanStatus("error");
-    setScanMessage("Camera permission denied or camera not available.");
+    setScanMessage(cameraErrorMessage(cameraError));
   }
 };
 

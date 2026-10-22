@@ -12,7 +12,7 @@ import {
   Camera,
 } from "lucide-react";
 
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { startCameraScanner, cameraErrorMessage, type CameraScanner } from "../lib/qrScanner";
 import { apiFetch } from "../lib/api";
 
 
@@ -39,7 +39,7 @@ export function StudentActivities() {
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<"success" | "error" | "">("");
   const [scanning, setScanning] = useState(true);
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<CameraScanner | null>(null);
   const scanLocked = useRef(false);
 
 
@@ -107,20 +107,8 @@ export function StudentActivities() {
     await stopScanner();
 
     try {
-      const scanner = new Html5QrcodeScanner(
+      scannerRef.current = await startCameraScanner(
         "activity-reader",
-        {
-          fps: 10,
-          qrbox: { width: 300, height: 300 },
-          rememberLastUsedCamera: true,
-          supportedScanTypes: [],
-        },
-        false
-      );
-
-      scannerRef.current = scanner;
-
-      scanner.render(
         async (decodedText) => {
           if (scanLocked.current) return;
           scanLocked.current = true;
@@ -153,12 +141,11 @@ export function StudentActivities() {
             setStatus("error");
             setMessage("Cannot connect to server.");
           }
-        },
-        () => {}
+        }
       );
-    } catch {
+    } catch (cameraError) {
       setStatus("error");
-      setMessage("Camera permission denied or camera not available.");
+      setMessage(cameraErrorMessage(cameraError));
       setScanning(false);
     }
   };
