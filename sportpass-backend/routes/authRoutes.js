@@ -485,10 +485,8 @@ router.post("/student-qr-token", requireAuth, requireStudent, (req, res) => {
       const qrToken = jwt.sign(
         {
           type: "SPORTPASS_ATTENDANCE_QR",
-          user_id,
           student_id,
           full_name,
-          purpose: "attendance",
         },
         process.env.JWT_SECRET,
         { expiresIn: STUDENT_QR_TTL_SECONDS }
@@ -501,10 +499,8 @@ router.post("/student-qr-token", requireAuth, requireStudent, (req, res) => {
       const offlineToken = jwt.sign(
         {
           type: "SPORTPASS_ATTENDANCE_QR",
-          user_id,
           student_id,
           full_name,
-          purpose: "attendance",
           offline_pass: true,
           exp: Math.floor(endOfToday.getTime() / 1000),
         },

@@ -115,7 +115,7 @@ test("student QR is always for the logged-in student", async () => {
   assert.equal(r.status, 200);
   const d = jwt.decode(r.json.token);
   assert.equal(d.student_id, "S1");
-  assert.equal(d.user_id, 5);
+  assert.equal(d.full_name, "Ana Cruz");
 });
 test("admin gets two fresh activity QR codes", async () => {
   const r = await call("GET", "/api/activities/7/qrcodes", admin);

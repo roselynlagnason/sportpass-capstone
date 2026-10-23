@@ -187,15 +187,15 @@ const generateQRToken = async (studentUser: LoggedUser) => {
             <div className="flex-shrink-0">
               <div
                 ref={qrRef}
-                className="w-44 h-44 rounded-2xl border-4 flex items-center justify-center bg-white p-3"
+                className="w-60 h-60 sm:w-64 sm:h-64 rounded-2xl border-4 flex items-center justify-center bg-white p-1.5"
                 style={{ borderColor: "var(--primary)" }}
               >
                 <QRCodeCanvas
                   value={qrValue || "SPORTPASS"}
-                  style={{ width: "100%", height: "100%", opacity: qrValue ? 1 : 0.1 }}
-                  size={200}
-                  level="H"
-                  includeMargin={false}
+                  style={{ width: "100%", height: "100%", display: "block", opacity: qrValue ? 1 : 0.1 }}
+                  size={512}
+                  level="L"
+                  marginSize={4}
                 />
               </div>
               <br></br>

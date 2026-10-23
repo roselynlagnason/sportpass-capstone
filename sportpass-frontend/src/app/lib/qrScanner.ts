@@ -35,6 +35,9 @@ export async function startCameraScanner(
   const reader = new Html5Qrcode(elementId, {
     formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
     verbose: false,
+    // Use the phone's built-in QR reader when available (much faster and
+    // better at reading QR codes shown on another screen).
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
   });
 
   let stopped = false;
@@ -54,7 +57,7 @@ export async function startCameraScanner(
   };
 
   const config = {
-    fps: 10,
+    fps: 15,
     aspectRatio: 1,
     qrbox: (width: number, height: number) => {
       const size = Math.max(100, Math.floor(Math.min(width, height) * 0.7));
@@ -67,7 +70,20 @@ export async function startCameraScanner(
   };
 
   try {
-    await reader.start({ facingMode: "environment" }, config, onSuccess, () => {});
+    // Back camera at a sharper resolution so dense QR codes can be read.
+    await reader.start(
+      { facingMode: "environment" },
+      {
+        ...config,
+        videoConstraints: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 1280 },
+        },
+      },
+      onSuccess,
+      () => {}
+    );
   } catch (firstError) {
     // Some laptops reject facingMode; fall back to the first camera found.
     try {

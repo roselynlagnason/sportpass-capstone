@@ -269,7 +269,7 @@ export function ActivityManagement() {
         </p>
 
         <div ref={qrRef} className="flex justify-center bg-white p-4 rounded-xl">
-          <QRCodeCanvas value={qr.qr_token} size={180} level="H" />
+          <QRCodeCanvas value={qr.qr_token} size={512} level="L" marginSize={4} style={{ width: "100%", maxWidth: 300, height: "auto", display: "block" }} />
         </div>
 
         <p className="text-xs text-muted-foreground mt-3">
