@@ -1,20 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  Calendar,
-  Clock,
-  MapPin,
-  Trophy,
-  CheckCircle,
-  Star,
-  QrCode,
-  AlertCircle,
-  RefreshCw,
-  Camera,
-  CloudOff,
-} from "lucide-react";
-
-import { startCameraScanner, cameraErrorMessage, type CameraScanner } from "../lib/qrScanner";
-import { saveScan, shouldSave } from "../lib/offlineQueue";
+import { useEffect, useState } from "react";
+import { Calendar, Clock, MapPin, Trophy, Star, ScanLine } from "lucide-react";
+import type { Screen } from "./Layout";
 import { apiFetch } from "../lib/api";
 
 
@@ -32,17 +18,12 @@ interface Activity {
   status: string;
 }
 
-export function StudentActivities() {
+export function StudentActivities({ setScreen }: { setScreen?: (s: Screen) => void }) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [sportFilter, setSportFilter] = useState("All");
   const [search, setSearch] = useState("");
   
-  const [message, setMessage] = useState("");
-  const [status, setStatus] = useState<"success" | "saved" | "error" | "">("");
-  const [scanning, setScanning] = useState(true);
-  const scannerRef = useRef<CameraScanner | null>(null);
-  const scanLocked = useRef(false);
 
 
 
@@ -92,93 +73,6 @@ export function StudentActivities() {
 
 
 
-  const stopScanner = async () => {
-    try {
-      await scannerRef.current?.clear();
-      scannerRef.current = null;
-    } catch {
-      scannerRef.current = null;
-    }
-  };
-
-  const startScanner = async () => {
-    setMessage("");
-    setStatus("");
-    scanLocked.current = false;
-
-    await stopScanner();
-
-    try {
-      scannerRef.current = await startCameraScanner(
-        "activity-reader",
-        async (decodedText) => {
-          if (scanLocked.current) return;
-          scanLocked.current = true;
-
-          await stopScanner();
-          setScanning(false);
-
-          // No internet (or older saved scans still waiting): keep the scan
-          // on this phone; points are added when it syncs.
-          const saveOnDevice = () => {
-            const saved = saveScan("participation", { token: decodedText }, "SPORTPASS_ACTIVITY_QR");
-            setStatus(saved.ok ? "saved" : "error");
-            setMessage(saved.message);
-          };
-
-          if (shouldSave("participation")) {
-            saveOnDevice();
-            return;
-          }
-
-          try {
-            const response = await apiFetch("/api/participation/scan", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token: decodedText }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-              setStatus("error");
-              setMessage(data.message || "Scan failed.");
-              return;
-            }
-
-            setStatus("success");
-            setMessage(data.message);
-            await fetchActivities();
-          } catch {
-            // The connection dropped: save the scan instead of losing it.
-            saveOnDevice();
-          }
-        }
-      );
-    } catch (cameraError) {
-      setStatus("error");
-      setMessage(cameraErrorMessage(cameraError));
-      setScanning(false);
-    }
-  };
-
-  useEffect(() => {
-    if (scanning) {
-      setTimeout(() => {
-        startScanner();
-      }, 300);
-    }
-
-    return () => {
-      stopScanner();
-    };
-  }, [scanning]);
-
-  const restartScanner = () => {
-    setMessage("");
-    setStatus("");
-    setScanning(true);
-  };
 
 
 
@@ -200,67 +94,32 @@ export function StudentActivities() {
 
 
 
- <div className="max-w-xl mx-auto space-y-6">
-      <div>
-        <h2 className="font-heading font-bold text-foreground text-xl">
-          Activity Scanner
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          Scan the activity QR code to record participation or accomplishment points.
-        </p>
-      </div>
-
+      {/* Scanning happens on the Activity Scanner page only. */}
       <div
-        className="rounded-2xl p-5 border"
+        className="rounded-2xl p-5 border flex flex-col sm:flex-row sm:items-center gap-4"
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
       >
-        {scanning ? (
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Camera size={18} style={{ color: "var(--primary)" }} />
-              <h3 className="font-heading font-bold text-foreground">
-                Camera Scanner
-              </h3>
-            </div>
-
-            <div
-              id="activity-reader"
-              className="overflow-hidden rounded-xl border bg-black min-h-[280px]"
-              style={{ borderColor: "var(--border)" }}
-            />
-
-            <p className="text-xs text-muted-foreground text-center mt-3">
-              Point the camera at the activity QR code.
-            </p>
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            {status === "saved" ? (
-              <CloudOff size={56} className="mx-auto mb-4" style={{ color: "#D97706" }} />
-            ) : status === "success" ? (
-              <CheckCircle size={56} className="mx-auto mb-4" style={{ color: "#10B981" }} />
-            ) : (
-              <AlertCircle size={56} className="mx-auto mb-4" style={{ color: "#EF4444" }} />
-            )}
-
-            <h3 className="font-heading font-bold text-foreground text-lg">
-              {status === "saved" ? "Saved on This Phone" : status === "success" ? "Scan Successful" : "Scan Failed"}
-            </h3>
-
-            <p className="text-sm text-muted-foreground mt-2">{message}</p>
-
-            <button
-              onClick={restartScanner}
-              className="mt-5 flex items-center justify-center gap-2 mx-auto px-5 py-2.5 rounded-xl text-white text-sm font-bold"
-              style={{ background: "var(--primary)" }}
-            >
-              <RefreshCw size={15} />
-              Scan Again
-            </button>
-          </div>
-        )}
+        <div
+          className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: "#2563EB18", color: "#2563EB" }}
+        >
+          <ScanLine size={20} />
+        </div>
+        <div className="flex-1">
+          <p className="font-heading font-bold text-foreground">Earn points</p>
+          <p className="text-sm text-muted-foreground">
+            At an activity, scan the participation or accomplishment QR code the officer shows.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setScreen?.("activity-scanner")}
+          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-bold"
+          style={{ background: "var(--primary)" }}
+        >
+          <ScanLine size={15} /> Open Activity Scanner
+        </button>
       </div>
-    </div>
 
 
 
@@ -448,10 +307,6 @@ export function StudentActivities() {
                     {activity.participation_points}
                   </p>
 
-                   <p className="text-lg font-bold text-blue-700">
-                    {activity.accomplishment_points}
-                  </p>
-
                   <p className="text-xs text-blue-700">
                     Participation
                   </p>
@@ -468,7 +323,7 @@ export function StudentActivities() {
                   />
 
                   <p className="text-lg font-bold text-yellow-700">
-                    {activity.points * 2}
+                    {activity.accomplishment_points}
                   </p>
 
                   <p className="text-xs text-yellow-700">
@@ -479,12 +334,14 @@ export function StudentActivities() {
               </div>
 
               <button
-                className="w-full py-3 rounded-xl text-white font-semibold mt-2"
+                type="button"
+                onClick={() => setScreen?.("activity-scanner")}
+                className="w-full py-3 rounded-xl text-white font-semibold mt-2 flex items-center justify-center gap-2"
                 style={{
                   background: "var(--primary)",
                 }}
               >
-                View Details
+                <ScanLine size={16} /> Scan Activity QR
               </button>
 
             </div>

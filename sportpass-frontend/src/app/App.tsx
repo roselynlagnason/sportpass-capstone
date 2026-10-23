@@ -123,7 +123,7 @@ export default function App() {
       case "admin-dashboard": return <AdminDashboard setScreen={setScreen} />;
       case "students": return <StudentManagement />;
       case "activities":
-        return role === "admin" ? <ActivityManagement /> : <StudentActivities />;
+        return role === "admin" ? <ActivityManagement /> : <StudentActivities setScreen={setScreen} />;
       case "sportfest-days": return <SportfestDays setScreen={setScreen} />;
       case "attendance": return <Attendance setScreen={setScreen} />;
       case "fines": return <FineMonitoring setScreen={setScreen} />;

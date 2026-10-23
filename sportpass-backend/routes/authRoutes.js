@@ -171,7 +171,15 @@ router.post("/login", (req, res) => {
   `;
 
   db.query(sql, [email], async (err, results) => {
-    if (err) return res.status(500).json({ message: "Database error" });
+    if (err) {
+      console.error("LOGIN DATABASE ERROR:", err.code || "", err.message);
+      return res.status(500).json({
+        message:
+          err.code === "ECONNREFUSED" || err.code === "ETIMEDOUT" || err.code === "ENOTFOUND"
+            ? "The server can't reach the database. Is MySQL running?"
+            : "Database error",
+      });
+    }
 
     if (results.length === 0) {
       return res.status(400).json({ message: "Incorrect email or password." });
