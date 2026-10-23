@@ -46,6 +46,9 @@ interface AttendanceRecord {
   attendance_status: "complete" | "no-time-out" | "absent" | "incomplete";
 
   fine: number;
+  // false while the day is still going: the fine is worked out from the
+  // scans so far and becomes final when the day is closed or has passed.
+  fine_final: boolean;
   payment_status: "paid" | "unpaid" | "none";
 }
 
@@ -170,6 +173,8 @@ export function FineMonitoring({ setScreen }: Props) {
             record.attendance_status || "absent",
 
           fine: Number(record.fine || 0),
+
+          fine_final: Number(record.fine_final) === 1 || record.fine_final === true,
 
           payment_status:
             record.payment_status === "paid"
@@ -478,6 +483,7 @@ export function FineMonitoring({ setScreen }: Props) {
 
           <p className="text-xs text-muted-foreground">
             {records.filter((r) => r.fine > 0).length} fine record(s)
+            {records.some((r) => r.fine > 0 && !r.fine_final) ? " · not final yet" : ""}
           </p>
         </div>
 
@@ -913,7 +919,7 @@ export function FineMonitoring({ setScreen }: Props) {
                           <span
                             className="text-sm font-bold"
                             style={{
-                              color: "#EF4444",
+                              color: record.fine_final ? "#EF4444" : "#D97706",
                             }}
                           >
                             ₱{Number(record.fine)}
@@ -933,7 +939,17 @@ export function FineMonitoring({ setScreen }: Props) {
 
                       <td className="px-5 py-3.5">
 
-                        {Number(record.fine) > 0 ? (
+                        {Number(record.fine) > 0 && !record.fine_final ? (
+
+                          <span
+                            className="text-xs px-2.5 py-1 rounded-full font-semibold"
+                            style={{ background: "#F59E0B20", color: "#B45309" }}
+                            title="Final when this sportfest day is closed or has passed"
+                          >
+                            Pending
+                          </span>
+
+                        ) : Number(record.fine) > 0 ? (
 
                           <span
                             className="text-xs px-2.5 py-1 rounded-full font-semibold"
@@ -971,7 +987,13 @@ export function FineMonitoring({ setScreen }: Props) {
 
                       <td className="px-5 py-3.5">
 
-                        {Number(record.fine) > 0 ? (
+                        {Number(record.fine) > 0 && !record.fine_final ? (
+
+                          <span className="text-xs text-muted-foreground">
+                            Collect after the day closes
+                          </span>
+
+                        ) : Number(record.fine) > 0 ? (
 
                           record.payment_status ===
                           "paid" ? (

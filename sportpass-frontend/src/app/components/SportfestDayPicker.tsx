@@ -63,8 +63,10 @@ export function SportfestDayPicker({
     } else {
       note = dayFinesCount(selected)
         ? { text: "Fines for this day are final.", color: "#059669" }
+        : dayWhen(selected) === "upcoming"
+        ? { text: `No fines yet. This day starts on ${shortDate(selected.date_key)}.`, color: "#2563EB" }
         : {
-            text: `Fines start counting once this day is closed or after ${shortDate(selected.date_key)}.`,
+            text: `Fines are computed from today's scans and become final when this day is closed or after ${shortDate(selected.date_key)}.`,
             color: "#D97706",
           };
     }

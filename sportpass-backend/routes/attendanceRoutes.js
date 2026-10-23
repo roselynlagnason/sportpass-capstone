@@ -221,13 +221,16 @@ router.get("/day/:day_id", requireAdmin, (req, res) => {
         ELSE 'incomplete'
       END AS attendance_status,
 
-      -- Same rules as lib/fines.js (the Fines page and dashboards)
+      -- Same rules as lib/fines.js. Computed live from the day's scans;
+      -- fine_final says whether the day is over (closed or past), which is
+      -- when the fine becomes official and can be marked paid.
       CASE
-        WHEN NOT ${DAY_IS_OVER} THEN 0
+        WHEN sd.sportfest_date > CURDATE() THEN 0
         WHEN d.attendance_id IS NULL THEN
           IF(DATE(u.created_at) <= sd.sportfest_date, ${finePerScan() * 2}, 0)
         ELSE ${attendanceFineAmount("d")}
-      END AS fine
+      END AS fine,
+      ${DAY_IS_OVER} AS fine_final
     FROM students s
     JOIN users u ON s.user_id = u.user_id
     CROSS JOIN (SELECT * FROM sportfest_days WHERE day_id = ?) sd
