@@ -25,6 +25,7 @@ import {
   renderPrintableReport,
 } from "../lib/reports";
 import { buildReport, type ReportTitle } from "../lib/reportData";
+import { alertDialog } from "../lib/dialog";
 
 interface ReportSummary {
   total_students: number;
@@ -52,7 +53,7 @@ export function Reports() {
       const data = await response.json();
       setSummary(data);
     } catch {
-      alert("Failed to load reports.");
+      alertDialog("Failed to load reports.");
     } finally {
       setLoading(false);
     }
@@ -79,7 +80,7 @@ export function Reports() {
       }
     } catch (error) {
       win?.close();
-      alert(error instanceof Error ? error.message : "Failed to generate report.");
+      alertDialog(error instanceof Error ? error.message : "Failed to generate report.");
     } finally {
       setGenerating(null);
     }

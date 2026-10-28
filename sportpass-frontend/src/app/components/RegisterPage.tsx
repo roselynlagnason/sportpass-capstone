@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Trophy, ArrowLeft, Upload, Check, AlertCircle, X } from "lucide-react";
 import { apiFetch } from "../lib/api";
+import { alertDialog, confirmDialog } from "../lib/dialog";
 
 interface RegisterPageProps {
   onBack: () => void;
@@ -61,6 +62,8 @@ function InputField({ label, value, type = "text", placeholder, error, autoCompl
 type Errors = Record<string, string>;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Only school email addresses can register.
+const SCHOOL_DOMAIN = "cec.edu.ph";
 // Philippine mobile number: 09XXXXXXXXX or +639XXXXXXXXX (spaces/dashes allowed)
 const PH_MOBILE_RE = /^(09|\+639)\d{9}$/;
 
@@ -117,7 +120,9 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
       if (!t(form.studentId)) e.studentId = "Enter your student ID.";
       else if (!/^[0-9-]+$/.test(t(form.studentId))) e.studentId = "Use numbers only (dashes allowed).";
       if (!t(form.email)) e.email = "Enter your email address.";
-      else if (!EMAIL_RE.test(t(form.email))) e.email = "Enter a valid email, like name@gmail.com.";
+      else if (!EMAIL_RE.test(t(form.email))) e.email = `Enter a valid email, like santos.maria@${SCHOOL_DOMAIN}.`;
+      else if (!t(form.email).toLowerCase().endsWith(`@${SCHOOL_DOMAIN}`))
+        e.email = `Use your school email address (ending in @${SCHOOL_DOMAIN}).`;
       const phone = form.contact.replace(/[\s-]/g, "");
       if (!phone) e.contact = "Enter your contact number.";
       else if (!PH_MOBILE_RE.test(phone)) e.contact = "Enter an 11-digit mobile number, like 09171234567.";
@@ -204,14 +209,14 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.message || "Registration failed.");
+        alertDialog(data.message || "Registration failed.");
         return;
       }
 
-      alert("Registration successful! You can now log in.");
+      alertDialog({ title: "Registration successful", message: "Your account is ready. You can now log in.", tone: "success" });
       onBack();
     } catch (error) {
-      alert("Can't reach the server. Check your internet connection and try again.");
+      alertDialog("Can't reach the server. Check your internet connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -270,7 +275,7 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
               </div>
 
               <InputField label="Student ID" value={form.studentId} placeholder="e.g. 202611016" inputMode="numeric" maxLength={20} error={errors.studentId} onChange={(v) => update("studentId", v)} />
-              <InputField label="Email Address" value={form.email} type="email" placeholder="e.g. maria.santos@gmail.com" autoComplete="email" inputMode="email" error={errors.email} onChange={(v) => update("email", v)} />
+              <InputField label="School Email Address" value={form.email} type="email" placeholder="e.g. santos.maria@cec.edu.ph" autoComplete="email" inputMode="email" error={errors.email} onChange={(v) => update("email", v)} />
               <InputField
                   label="Contact Number"
                   value={form.contact}

@@ -4,6 +4,9 @@ const db = require("../db");
 const { requireAdmin, selfOrAdmin } = require("../middleware/auth");
 const {
   finePerScan,
+  settle,
+  PAID_FOR_DAY,
+  NOTE_FOR_DAY,
   DAY_IS_OVER,
   DAY_NAME,
   attendanceFineAmount,
@@ -20,6 +23,18 @@ const router = express.Router();
  */
 
 const isDate = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+// "17:00" or "17:00:00" -> "17:00:00"; "" / null -> null (no closing time).
+function readClosingTime(v) {
+  if (v === undefined) return { skip: true };
+  if (v === null || v === "") return { value: null };
+  const m = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(String(v));
+  if (!m) return { error: "Enter the closing time as HH:MM, e.g. 17:00." };
+  return { value: `${m[1]}:${m[2]}:${m[3] || "00"}` };
+}
+const formatClock = (t) => {
+  const [h, m] = String(t).split(":").map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+};
 
 /* ---------------------------------------------------------------------
  * Sportfest days
@@ -34,6 +49,7 @@ router.get("/days", (req, res) => {
       DATE_FORMAT(sd.sportfest_date, '%Y-%m-%d') AS date_key,
       sd.title,
       sd.status,
+      DATE_FORMAT(sd.closes_at, '%H:%i') AS closes_at,
       sd.sportfest_date = CURDATE() AS is_today,
       ${DAY_IS_OVER} AS is_over,
       (SELECT COUNT(*) FROM daily_attendance d
@@ -58,10 +74,12 @@ router.get("/days", (req, res) => {
 /* ADMIN: make a date a sportfest day. */
 router.post("/days", requireAdmin, (req, res) => {
   const { sportfest_date, title, notify } = req.body;
+  const closing = readClosingTime(req.body.closes_at);
 
   if (!isDate(sportfest_date)) {
     return res.status(400).json({ message: "Choose a date for the sportfest day." });
   }
+  if (closing.error) return res.status(400).json({ message: closing.error });
   if (title && String(title).length > 150) {
     return res.status(400).json({ message: "The title is too long." });
   }
@@ -75,8 +93,8 @@ router.post("/days", requireAdmin, (req, res) => {
   }
 
   db.query(
-    "INSERT INTO sportfest_days (sportfest_date, title, created_by) VALUES (?, ?, ?)",
-    [sportfest_date, title ? String(title).trim() : null, req.user.user_id],
+    "INSERT INTO sportfest_days (sportfest_date, title, closes_at, created_by) VALUES (?, ?, ?, ?)",
+    [sportfest_date, title ? String(title).trim() : null, closing.value ?? null, req.user.user_id],
     (err, result) => {
       if (err) {
         if (err.code === "ER_DUP_ENTRY") {
@@ -99,7 +117,8 @@ router.post("/days", requireAdmin, (req, res) => {
            VALUES (?, ?, 'activity', 'student', ?)`,
           [
             title ? `Sportfest day: ${String(title).trim()}` : "Sportfest day announced",
-            `${label} is a sportfest day. Show your QR code to an officer for time-in when you arrive and time-out when you leave.`,
+            `${label} is a sportfest day. Show your QR code to an officer for time-in when you arrive and time-out when you leave.` +
+              (closing.value ? ` Attendance closes at ${formatClock(closing.value)}.` : ""),
             req.user.user_id,
           ],
           (nErr) => {
@@ -134,6 +153,12 @@ router.put("/days/:day_id", requireAdmin, (req, res) => {
     sets.push("status = ?");
     params.push(req.body.status);
   }
+  const closing = readClosingTime(req.body.closes_at);
+  if (closing.error) return res.status(400).json({ message: closing.error });
+  if (!closing.skip) {
+    sets.push("closes_at = ?");
+    params.push(closing.value);
+  }
   if (sets.length === 0) return res.status(400).json({ message: "Nothing to change." });
 
   params.push(req.params.day_id);
@@ -162,6 +187,27 @@ router.delete("/days/:day_id", requireAdmin, (req, res) => {
       db.query("DELETE FROM sportfest_days WHERE day_id = ?", [req.params.day_id], (delErr, result) => {
         if (delErr) return res.status(500).json({ message: "Failed to remove the sportfest day." });
         if (result.affectedRows === 0) return res.status(404).json({ message: "Sportfest day not found." });
+
+        // Optional announcement to students that the day was cancelled.
+        const body = req.body || {};
+        const title = String(body.announce_title || "").trim().slice(0, 150);
+        const message = String(body.announce_message || "").trim().slice(0, 2000);
+        if (body.notify && title && message) {
+          return db.query(
+            `INSERT INTO notifications (title, message, type, recipient_role, created_by)
+             VALUES (?, ?, 'alert', 'student', ?)`,
+            [title, message, req.user.user_id],
+            (nErr) => {
+              if (nErr) console.log("Cancellation notice not sent:", nErr.message);
+              res.json({
+                message: nErr
+                  ? "Sportfest day removed, but the announcement could not be sent."
+                  : "Sportfest day removed. Students have been notified.",
+                notified: !nErr,
+              });
+            }
+          );
+        }
         res.json({ message: "Sportfest day removed." });
       });
     }
@@ -177,22 +223,37 @@ router.get("/history/:student_id", selfOrAdmin("student_id"), (req, res) => {
   const sql = `
     SELECT
       d.attendance_id,
-      d.day_id,
+      sd.day_id,
       sd.sportfest_date AS attendance_date,
       d.time_in,
       d.time_out,
       ${DAY_NAME} AS activity_name,
       'Sportfest Day' AS sport_name,
-      '' AS activity_location
-    FROM daily_attendance d
-    JOIN sportfest_days sd ON d.day_id = sd.day_id
-    WHERE d.student_id = ?
+      '' AS activity_location,
+      IF(d.payment_status = 'paid', 1, 0) AS legacy_paid,
+      ${PAID_FOR_DAY("s.student_id", "sd.day_id")} AS paid_raw,
+      ${NOTE_FOR_DAY("s.student_id", "sd.day_id")} AS payment_note,
+      -- Same rules as lib/fines.js (dashboard, My Fines, Fine Monitoring):
+      -- a day with no record at all is an absence (2 missed scans).
+      CASE
+        WHEN d.attendance_id IS NULL THEN ${finePerScan() * 2}
+        ELSE ${attendanceFineAmount("d")}
+      END AS fine,
+      ${DAY_IS_OVER} AS fine_final
+    FROM students s
+    JOIN users u ON u.user_id = s.user_id
+    CROSS JOIN sportfest_days sd
+    LEFT JOIN daily_attendance d
+      ON d.student_id = s.student_id AND d.day_id = sd.day_id
+    WHERE s.student_id = ?
+      AND sd.sportfest_date <= CURDATE()
+      AND (d.attendance_id IS NOT NULL OR DATE(u.created_at) <= sd.sportfest_date)
     ORDER BY sd.sportfest_date DESC
   `;
 
   db.query(sql, [req.params.student_id], (err, rows) => {
     if (err) return res.status(500).json({ message: "Database error." });
-    res.json(rows);
+    res.json(rows.map((r) => settle(r, "fine")));
   });
 });
 
@@ -212,7 +273,9 @@ router.get("/day/:day_id", requireAdmin, (req, res) => {
       sd.sportfest_date AS attendance_date,
       d.time_in,
       d.time_out,
-      COALESCE(d.payment_status, 'unpaid') AS payment_status,
+      IF(d.payment_status = 'paid', 1, 0) AS legacy_paid,
+      ${PAID_FOR_DAY("s.student_id", "sd.day_id")} AS paid_raw,
+      ${NOTE_FOR_DAY("s.student_id", "sd.day_id")} AS payment_note,
 
       CASE
         WHEN d.attendance_id IS NULL THEN 'absent'
@@ -245,7 +308,7 @@ router.get("/day/:day_id", requireAdmin, (req, res) => {
       console.error(err);
       return res.status(500).json({ message: "Database error." });
     }
-    res.json(results);
+    res.json(results.map((r) => settle(r, "fine")));
   });
 });
 
@@ -280,8 +343,11 @@ router.post("/scan", requireAdmin, offlineScan("attendance"), (req, res) => {
   const name = decoded.full_name || student_id;
 
   db.query(
-    "SELECT sportfest_date = DATE(COALESCE(?, NOW())) AS is_today, status FROM sportfest_days WHERE day_id = ?",
-    [scanTime, day_id],
+    `SELECT sportfest_date = DATE(COALESCE(?, NOW())) AS is_today, status,
+            closes_at IS NOT NULL AND TIME(COALESCE(?, NOW())) >= closes_at AS after_closing,
+            DATE_FORMAT(closes_at, '%H:%i') AS closes_at
+     FROM sportfest_days WHERE day_id = ?`,
+    [scanTime, scanTime, day_id],
     (dayErr, days) => {
       if (dayErr) return res.status(500).json({ message: "Database error." });
       if (days.length === 0) return res.status(404).json({ message: "Sportfest day not found." });
@@ -294,6 +360,11 @@ router.post("/scan", requireAdmin, offlineScan("attendance"), (req, res) => {
       // was closed before the phone got back online.
       if (days[0].status === "closed" && !scan.offline) {
         return res.status(400).json({ message: "This sportfest day is closed." });
+      }
+      if (Number(days[0].after_closing)) {
+        return res.status(400).json({
+          message: `Attendance for this day closed at ${formatClock(days[0].closes_at)}.`,
+        });
       }
 
       db.query(

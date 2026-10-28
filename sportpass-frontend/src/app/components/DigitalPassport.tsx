@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "../lib/api";
 import { openReportWindow, renderPrintableReport } from "../lib/reports";
+import { alertDialog } from "../lib/dialog";
 
 interface PassportActivity {
   activity_id: number;
@@ -79,7 +80,7 @@ export function DigitalPassport() {
         setActivities(data.activities || []);
         setSummary(data.summary || null);
       } catch {
-        alert("Failed to load passport data.");
+        alertDialog("Failed to load passport data.");
       } finally {
         setLoading(false);
       }

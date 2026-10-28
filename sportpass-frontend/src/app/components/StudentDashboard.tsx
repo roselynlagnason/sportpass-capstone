@@ -20,6 +20,7 @@ import {
 } from "recharts";
 import type { Screen } from "./Layout";
 import { apiFetch, API_BASE } from "../lib/api";
+import { alertDialog } from "../lib/dialog";
 
 interface Props {
   setScreen: (s: Screen) => void;
@@ -137,7 +138,7 @@ export function StudentDashboard({ setScreen }: Props) {
         setFines(fineData.filter((f) => f.student_id === user.student_id));
         setNotifications(notifData.slice(0, 3));
       } catch {
-        alert("Failed to load dashboard data.");
+        alertDialog("Failed to load dashboard data.");
       } finally {
         setLoading(false);
       }
@@ -170,7 +171,7 @@ export function StudentDashboard({ setScreen }: Props) {
 
   const totalFine = fines
     .filter((f) => f.payment_status !== "paid")
-    .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+    .reduce((sum, f: any) => sum + Number(f.balance ?? f.amount ?? 0), 0);
 
   const attendanceComplete = activities.filter((a) => a.time_in && a.time_out).length;
   const attendanceRate =

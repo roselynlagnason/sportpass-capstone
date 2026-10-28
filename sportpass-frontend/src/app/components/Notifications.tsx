@@ -46,10 +46,14 @@ function timeAgo(value: string) {
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return "Yesterday";
-  if (days < 7) return `${days} days ago`;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  // Older than a day: show the actual date and time, easier to track.
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 const inputStyle = {
@@ -63,6 +67,8 @@ export function Notifications() {
   const isAdmin = user.role === "admin";
 
   const [filter, setFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [notifs, setNotifs] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -106,6 +112,7 @@ export function Notifications() {
   const isRead = (n: NotificationItem) => isAdmin || Number(n.is_read) === 1;
 
   const unread = notifs.filter((n) => !isRead(n)).length;
+  const PAGE_SIZE = 10;
   const filtered = notifs.filter(
     (n) =>
       filter === "all" ||
@@ -124,6 +131,7 @@ export function Notifications() {
     await apiFetch(`/api/notifications/read/${n.notification_id}`, {
       method: "PUT",
     }).catch(() => {});
+    window.dispatchEvent(new Event("sportpass-notifications-changed"));
   };
 
   const markAll = async () => {
@@ -132,6 +140,7 @@ export function Notifications() {
     await apiFetch(`/api/notifications/read-all/${user.student_id}`, {
       method: "PUT",
     }).catch(() => {});
+    window.dispatchEvent(new Event("sportpass-notifications-changed"));
   };
 
   const send = async () => {
@@ -213,7 +222,10 @@ export function Notifications() {
         ].map((f) => (
           <button
             key={f.key}
-            onClick={() => setFilter(f.key)}
+            onClick={() => {
+              setFilter(f.key);
+              setPage(1);
+            }}
             className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${filter === f.key ? "text-white" : "text-muted-foreground border hover:text-foreground"}`}
             style={filter === f.key ? { background: "var(--primary)" } : { borderColor: "var(--border)" }}
           >
@@ -237,8 +249,10 @@ export function Notifications() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((n) => {
+          {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((n) => {
             const read = isRead(n);
+            const long = n.message.length > 280 || n.message.split("\n").length > 4;
+            const open = expanded.has(n.notification_id);
             const color = typeColor[n.type] || typeColor.system;
             return (
               <div
@@ -257,10 +271,31 @@ export function Notifications() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <p className={`text-sm text-foreground ${!read ? "font-bold" : "font-semibold"}`}>{n.title}</p>
+                      <p className={`text-sm text-foreground min-w-0 break-words [overflow-wrap:anywhere] ${!read ? "font-bold" : "font-semibold"}`}>{n.title}</p>
                       <span className="text-xs text-muted-foreground flex-shrink-0">{timeAgo(n.created_at)}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{n.message}</p>
+                    <p className={`text-sm text-muted-foreground mt-1 whitespace-pre-line break-words [overflow-wrap:anywhere] ${long && !open ? "line-clamp-4" : ""}`}>
+                      {n.message}
+                    </p>
+                    {long && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          markRead(n);
+                          setExpanded((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(n.notification_id)) next.delete(n.notification_id);
+                            else next.add(n.notification_id);
+                            return next;
+                          });
+                        }}
+                        className="text-xs font-semibold mt-1 hover:underline"
+                        style={{ color: "var(--primary)" }}
+                      >
+                        {open ? "Show less" : "Read more"}
+                      </button>
+                    )}
                     {isAdmin && (
                       <p className="text-xs text-muted-foreground mt-2">
                         Sent to: {recipientLabel[n.recipient_role] || n.recipient_role}
@@ -274,6 +309,38 @@ export function Notifications() {
               </div>
             );
           })}
+
+          {/* Pages: 10 notifications at a time */}
+          {filtered.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <p className="text-xs text-muted-foreground">
+                {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-2 rounded-xl border text-xs font-semibold disabled:opacity-40 hover:bg-muted"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  ← Newer
+                </button>
+                <span className="text-xs font-semibold text-foreground">
+                  Page {page} of {Math.ceil(filtered.length / PAGE_SIZE)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1))}
+                  disabled={page >= Math.ceil(filtered.length / PAGE_SIZE)}
+                  className="px-3 py-2 rounded-xl border text-xs font-semibold disabled:opacity-40 hover:bg-muted"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  Older →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -297,11 +364,12 @@ export function Notifications() {
               </div>
               <div>
                 <label htmlFor="notif-title" className="text-sm font-semibold text-foreground mb-1.5 block">Title</label>
-                <input id="notif-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Basketball finals moved to 3 PM" className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none" style={inputStyle} />
+                <input id="notif-title" maxLength={150} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Basketball finals moved to 3 PM" className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none" style={inputStyle} />
               </div>
               <div>
                 <label htmlFor="notif-message" className="text-sm font-semibold text-foreground mb-1.5 block">Message</label>
-                <textarea id="notif-message" value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} rows={3} placeholder="Write your message..." className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none resize-none" style={inputStyle} />
+                <textarea id="notif-message" maxLength={2000} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} rows={5} placeholder="Write your message..." className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none resize-y" style={inputStyle} />
+                <p className="text-xs text-muted-foreground text-right mt-1">{form.message.length} / 2000</p>
               </div>
               <div>
                 <label htmlFor="notif-type" className="text-sm font-semibold text-foreground mb-1.5 block">Type</label>

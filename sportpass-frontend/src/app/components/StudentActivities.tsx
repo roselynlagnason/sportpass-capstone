@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Calendar, Clock, MapPin, Trophy, Star, ScanLine } from "lucide-react";
 import type { Screen } from "./Layout";
 import { apiFetch } from "../lib/api";
+import { alertDialog } from "../lib/dialog";
 
 
 interface Activity {
@@ -40,7 +41,7 @@ export function StudentActivities({ setScreen }: { setScreen?: (s: Screen) => vo
 
       setActivities(data);
     } catch {
-      alert("Unable to load activities.");
+      alertDialog("Unable to load activities.");
     } finally {
       setLoading(false);
     }

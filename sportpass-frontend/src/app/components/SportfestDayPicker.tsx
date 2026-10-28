@@ -6,6 +6,8 @@ import {
   dayLongLabel,
   dayNumber,
   dayWhen,
+  closingPassed,
+  clockLabel,
   type SportfestDay,
 } from "../lib/sportfestDays";
 
@@ -55,8 +57,15 @@ export function SportfestDayPicker({
       note =
         selected.status === "closed"
           ? { text: "This day is closed, so scanning is off.", color: "#6B7280" }
+          : closingPassed(selected)
+          ? { text: `Attendance closed at ${clockLabel(selected.closes_at)}, so scanning is off.`, color: "#6B7280" }
           : w === "today"
-          ? { text: "Scanning is open today.", color: "#059669" }
+          ? {
+              text: selected.closes_at
+                ? `Scanning is open today until ${clockLabel(selected.closes_at)}.`
+                : "Scanning is open today.",
+              color: "#059669",
+            }
           : w === "upcoming"
           ? { text: `Scanning opens on ${shortDate(selected.date_key)}.`, color: "#2563EB" }
           : { text: "This day has passed, so scanning is closed.", color: "#6B7280" };

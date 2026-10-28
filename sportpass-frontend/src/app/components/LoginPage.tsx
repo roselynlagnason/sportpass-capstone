@@ -120,7 +120,7 @@ export function LoginPage({ onLogin, onRegister }: LoginPageProps) {
               onChange={e => { setEmail(e.target.value); setError(""); }}
               className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none transition-all"
               style={{ background: "var(--input-background)", borderColor: "var(--border)", color: "var(--foreground)" }}
-              placeholder="you@example.com"
+              placeholder="yourname@cec.edu.ph"
             />
           </div>
 

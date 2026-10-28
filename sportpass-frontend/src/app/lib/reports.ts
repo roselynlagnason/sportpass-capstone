@@ -1,3 +1,4 @@
+import { alertDialog } from "./dialog";
 // Report output without extra packages:
 //  - downloadCSV(): a .csv file that opens in Excel
 //  - openPrintableReport(): a clean page in a new tab; the browser's
@@ -81,7 +82,7 @@ export function renderPrintableReport(
   summary: { label: string; value: unknown }[] = []
 ) {
   if (!win) {
-    alert("Allow pop-ups for this site to download the PDF report.");
+    alertDialog("Allow pop-ups for this site, then try downloading the PDF report again.", { tone: "warning", title: "Pop-up blocked" });
     return;
   }
 

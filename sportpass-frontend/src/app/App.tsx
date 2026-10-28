@@ -21,6 +21,7 @@ import { MyFines } from "./components/MyFines";
 import { ActivityScanner } from "./components/ActivityScanner";
 import { StudentActivities } from "./components/StudentActivities";
 import { SportfestDays } from "./components/SportfestDays";
+import { StudentCalendar } from "./components/StudentCalendar";
 import { applyPrimaryColor, loadSettings } from "./lib/settings";
 
 // Pages each role may open. The current page is kept in the address bar
@@ -32,7 +33,7 @@ const SCREENS: Record<Role, Screen[]> = {
     "fines", "performance", "rankings", "notifications", "reports", "settings",
   ],
   student: [
-    "student-dashboard", "qr-code", "attendance-history", "activities", "activity-scanner",
+    "student-dashboard", "qr-code", "calendar", "attendance-history", "activities", "activity-scanner",
     "passport", "performance", "rankings", "my-fines", "notifications", "profile",
   ],
 };
@@ -133,6 +134,7 @@ export default function App() {
 
       case "student-dashboard": return <StudentDashboard setScreen={setScreen} />;
       case "qr-code": return <StudentQRCode />;
+      case "calendar": return <StudentCalendar setScreen={setScreen} />;
       case "attendance-history": return <AttendanceHistory />;
       case "passport": return <DigitalPassport />;
       case "my-fines": return <MyFines />;

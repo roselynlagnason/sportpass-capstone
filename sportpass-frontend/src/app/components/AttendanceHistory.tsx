@@ -7,24 +7,21 @@ import {
   DollarSign,
 } from "lucide-react";
 import { apiFetch } from "../lib/api";
-
-const FINE_PER_VIOLATION = 30;
+import { alertDialog } from "../lib/dialog";
+import { getSettings } from "../lib/settings";
 
 interface HistoryRecord {
-  attendance_id: number;
+  attendance_id: number | null; // null = no scans at all that day (absent)
+  day_id: number;
+  fine: number; // worked out by the server, same rules as the dashboard
+  fine_final: boolean; // false while the day is still open (today)
   attendance_date: string;
   time_in: string | null;
   time_out: string | null;
   activity_name: string;
   sport_name: string;
   activity_location: string;
-  payment_status?: "unpaid" | "partial" | "paid" | "none";
-}
-
-interface FineRecord {
-  attendance_id: number;
-  amount: number;
-  payment_status: "unpaid" | "partial" | "paid" | "none";
+  payment_status?: "unpaid" | "partial" | "paid" | "none" | "pending";
 }
 
 const statusConfig = {
@@ -32,6 +29,7 @@ const statusConfig = {
   unpaid: { label: "Unpaid", color: "#EF4444", bg: "#EF444420" },
   partial: { label: "Partial", color: "#F59E0B", bg: "#F59E0B20" },
   none: { label: "No Fine", color: "#6B7280", bg: "#6B728020" },
+  pending: { label: "Pending", color: "#B45309", bg: "#F59E0B20" },
 };
 
 function formatDate(date: string) {
@@ -64,10 +62,7 @@ function getStatus(r: HistoryRecord) {
 }
 
 function getFine(r: HistoryRecord) {
-  return (
-    (!r.time_in ? FINE_PER_VIOLATION : 0) +
-    (!r.time_out ? FINE_PER_VIOLATION : 0)
-  );
+  return Number(r.fine || 0);
 }
 
 export function AttendanceHistory() {
@@ -82,31 +77,24 @@ export function AttendanceHistory() {
         const historyRes = await apiFetch(
           `/api/attendance/history/${user.student_id}`
         );
-
-        const finesRes = await apiFetch(
-          `/api/fines/student/${user.student_id}`
-        );
-
         const historyData = await historyRes.json();
-        const finesData = await finesRes.json();
+        if (!historyRes.ok || !Array.isArray(historyData)) throw new Error();
 
-        const merged = historyData.map((record: HistoryRecord) => {
-          const fineRecord = finesData.find(
-            (f: FineRecord) => f.attendance_id === record.attendance_id
-          );
-
+        const merged = historyData.map((record: any) => {
+          const fine = Number(record.fine || 0);
+          const final = Number(record.fine_final) === 1 || record.fine_final === true;
           return {
             ...record,
+            fine,
+            fine_final: final,
             payment_status:
-              getFine(record) > 0
-                ? fineRecord?.payment_status || "unpaid"
-                : "none",
+              fine <= 0 ? "none" : !final ? "pending" : ["paid", "partial"].includes(record.payment_status) ? record.payment_status : "unpaid",
           };
         });
 
         setHistory(merged);
       } catch {
-        alert("Failed to load attendance history.");
+        alertDialog("Failed to load attendance history.");
       } finally {
         setLoading(false);
       }
@@ -124,13 +112,11 @@ export function AttendanceHistory() {
   const attendanceRate =
     history.length > 0 ? Math.round((complete / history.length) * 100) : 0;
 
-  const outstandingFines = history
-    .filter((r) => getFine(r) > 0 && r.payment_status !== "paid")
-    .reduce((sum, r) => sum + getFine(r), 0);
-
-  const fineCount = history.filter(
-    (r) => getFine(r) > 0 && r.payment_status !== "paid"
-  ).length;
+  // Only final fines (day closed or past) count, same as the dashboard.
+  const owed = history.filter((r) => r.payment_status === "unpaid" || r.payment_status === "partial");
+  const outstandingFines = owed.reduce((sum, r: any) => sum + Number(r.balance ?? getFine(r)), 0);
+  const fineCount = owed.length;
+  const finePerScan = Number(getSettings().fine_per_missed_scan) || 30;
 
   if (loading) {
     return (
@@ -190,14 +176,14 @@ export function AttendanceHistory() {
               Automatic Fine Policy
             </h3>
             <p className="text-white/65 text-sm mt-1">
-              Fines are computed from attendance QR scan records.
+              Fines are computed from attendance QR scan records and become final when the sportfest day is closed or over.
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-3 sm:flex sm:gap-4">
             <div className="text-center">
               <p className="text-2xl font-heading font-bold" style={{ color: "#F59E0B" }}>
-                ₱30
+                ₱{finePerScan}
               </p>
               <p className="text-white/55 text-xs">Missing Time-In</p>
             </div>
@@ -206,7 +192,7 @@ export function AttendanceHistory() {
 
             <div className="text-center">
               <p className="text-2xl font-heading font-bold" style={{ color: "#F59E0B" }}>
-                ₱30
+                ₱{finePerScan}
               </p>
               <p className="text-white/55 text-xs">Missing Time-Out</p>
             </div>
@@ -215,9 +201,9 @@ export function AttendanceHistory() {
 
             <div className="text-center">
               <p className="text-2xl font-heading font-bold text-white">
-                ₱60
+                ₱{finePerScan * 2}
               </p>
-              <p className="text-white/55 text-xs">Both Missed</p>
+              <p className="text-white/55 text-xs">Both Missed / Absent</p>
             </div>
           </div>
         </div>
@@ -305,7 +291,7 @@ export function AttendanceHistory() {
                     colSpan={6}
                     className="px-5 py-8 text-center text-sm text-muted-foreground"
                   >
-                    No attendance records yet.
+                    No sportfest days yet.
                   </td>
                 </tr>
               ) : (
@@ -317,7 +303,7 @@ export function AttendanceHistory() {
 
                   return (
                     <tr
-                      key={r.attendance_id}
+                      key={r.day_id}
                       className="hover:bg-muted/30 transition-colors"
                     >
                       <td className="px-5 py-4 text-sm font-semibold text-foreground whitespace-nowrap">
@@ -385,6 +371,8 @@ export function AttendanceHistory() {
                               color:
                                 r.payment_status === "paid"
                                   ? "#10B981"
+                                  : r.payment_status === "pending"
+                                  ? "#D97706"
                                   : "#EF4444",
                             }}
                           >

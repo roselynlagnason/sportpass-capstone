@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS sportfest_days (
   sportfest_date  DATE         NOT NULL,
   title           VARCHAR(150) NULL,
   status          ENUM('open', 'closed') NOT NULL DEFAULT 'open',
+  closes_at       TIME         NULL,  -- the day closes by itself at this time
   created_by      INT          NULL,
   created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_sportfest_date (sportfest_date),
@@ -215,6 +216,28 @@ CREATE TABLE IF NOT EXISTS system_settings (
   setting_key    VARCHAR(64) NOT NULL PRIMARY KEY,
   setting_value  TEXT        NOT NULL,
   updated_at     TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Payments toward a fine. A fine can be paid in parts: each payment is one
+-- row (amount + note). Day fines are identified by student + sportfest day,
+-- manual fines by fine_id. Balance = fine - SUM(amount).
+CREATE TABLE IF NOT EXISTS fine_payments (
+  payment_id   INT AUTO_INCREMENT PRIMARY KEY,
+  student_id   VARCHAR(30)   NOT NULL,
+  day_id       INT           NULL,
+  fine_id      INT           NULL,
+  amount       DECIMAL(10,2) NOT NULL,
+  note         VARCHAR(255)  NULL,
+  recorded_by  INT           NULL,
+  paid_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_fine_payments_day (student_id, day_id),
+  KEY idx_fine_payments_manual (fine_id),
+  CONSTRAINT fk_payments_student FOREIGN KEY (student_id)
+    REFERENCES students (student_id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_payments_day FOREIGN KEY (day_id)
+    REFERENCES sportfest_days (day_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_payments_recorder FOREIGN KEY (recorded_by)
+    REFERENCES users (user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- Scans that were saved on a phone while offline and synced later

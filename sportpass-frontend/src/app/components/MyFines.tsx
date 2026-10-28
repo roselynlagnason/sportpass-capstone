@@ -6,6 +6,7 @@ import {
   Clock,
 } from "lucide-react";
 import { apiFetch } from "../lib/api";
+import { alertDialog } from "../lib/dialog";
 
 const FINE_PER_VIOLATION = 30;
 
@@ -25,6 +26,9 @@ interface FineRecord {
   missed_in: boolean;
   missed_out: boolean;
   amount: number;
+  amount_paid?: number;
+  balance?: number;
+  payment_note?: string | null;
   payment_status: "unpaid" | "partial" | "paid" | "none";
 }
 
@@ -59,7 +63,7 @@ export function MyFines() {
         const data = await response.json();
         setMyFines(data);
       } catch {
-        alert("Failed to load your fines.");
+        alertDialog("Failed to load your fines.");
       } finally {
         setLoading(false);
       }
@@ -69,7 +73,7 @@ export function MyFines() {
   }, []);
 
   const unpaid = myFines.filter((f) => f.payment_status !== "paid");
-  const totalOwed = unpaid.reduce((sum, f) => sum + Number(f.amount || 0), 0);
+  const totalOwed = unpaid.reduce((sum, f) => sum + Number(f.balance ?? f.amount ?? 0), 0);
 
   if (loading) {
     return (
@@ -155,7 +159,7 @@ export function MyFines() {
 
             return (
               <div
-                key={f.attendance_id}
+                key={`${(f as any).fine_type}-${(f as any).day_id ?? (f as any).fine_id}-${f.attendance_date}`}
                 className="rounded-2xl p-5 border"
                 style={{
                   background: "var(--card)",
@@ -180,7 +184,8 @@ export function MyFines() {
                     </div>
 
                     <p className="text-xs text-muted-foreground mb-3">
-                      Attendance ID: {f.attendance_id} 
+                      {f.activity_name}
+                      {f.payment_note ? ` · Note: ${f.payment_note}` : ""}
                     </p>
 
                     <div className="space-y-1.5">
@@ -252,6 +257,10 @@ export function MyFines() {
                     {f.payment_status === "paid" ? (
                       <span className="text-xs" style={{ color: "#10B981" }}>
                         ✓ Settled
+                      </span>
+                    ) : f.payment_status === "partial" ? (
+                      <span className="block text-xs" style={{ color: "#B45309" }}>
+                        Paid ₱{Number(f.amount_paid || 0)} · ₱{Number(f.balance || 0)} left
                       </span>
                     ) : (
                       <span

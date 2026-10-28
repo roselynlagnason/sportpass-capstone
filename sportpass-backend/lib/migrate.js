@@ -120,6 +120,35 @@ const STEPS = [
               ADD COLUMN photo_type VARCHAR(30) NULL AFTER photo_data`,
   },
   {
+    name: "sportfest_days.closes_at column (closing time)",
+    check: `SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sportfest_days' AND COLUMN_NAME = 'closes_at'`,
+    apply: `ALTER TABLE sportfest_days ADD COLUMN closes_at TIME NULL AFTER status`,
+  },
+  {
+    name: "fine_payments table (partial payments and notes)",
+    check: `SELECT COUNT(*) AS n FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fine_payments'`,
+    apply: `CREATE TABLE fine_payments (
+              payment_id INT AUTO_INCREMENT PRIMARY KEY,
+              student_id VARCHAR(30) NOT NULL,
+              day_id INT NULL,
+              fine_id INT NULL,
+              amount DECIMAL(10,2) NOT NULL,
+              note VARCHAR(255) NULL,
+              recorded_by INT NULL,
+              paid_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              KEY idx_fine_payments_day (student_id, day_id),
+              KEY idx_fine_payments_manual (fine_id),
+              CONSTRAINT fk_payments_student FOREIGN KEY (student_id)
+                REFERENCES students (student_id) ON DELETE CASCADE ON UPDATE CASCADE,
+              CONSTRAINT fk_payments_day FOREIGN KEY (day_id)
+                REFERENCES sportfest_days (day_id) ON DELETE RESTRICT,
+              CONSTRAINT fk_payments_recorder FOREIGN KEY (recorded_by)
+                REFERENCES users (user_id) ON DELETE SET NULL
+            ) ENGINE=InnoDB`,
+  },
+  {
     name: "offline_scans table (offline-first sync)",
     check: `SELECT COUNT(*) AS n FROM information_schema.TABLES
             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'offline_scans'`,

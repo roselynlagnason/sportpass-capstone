@@ -26,6 +26,7 @@ import {
 } from "../lib/sportfestDays";
 import { downloadCSV, fileStamp } from "../lib/reports";
 import { formatTime as fmtTime } from "../lib/reportData";
+import { alertDialog } from "../lib/dialog";
 
 const FINE_AMOUNT = 30;
 
@@ -269,7 +270,7 @@ const estimatedFines = records.reduce(
 
 
 const markPaid = async (attendanceId: number | null) => {
-  if (!attendanceId) return alert("No attendance record found.");
+  if (!attendanceId) return alertDialog("No attendance record found.");
 
   try {
     const response = await apiFetch(
@@ -287,7 +288,7 @@ const markPaid = async (attendanceId: number | null) => {
       )
     );
   } catch {
-    alert("Failed to mark fine as paid.");
+    alertDialog("Failed to mark fine as paid.");
   }
 };
 

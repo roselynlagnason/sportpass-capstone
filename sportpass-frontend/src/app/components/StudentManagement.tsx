@@ -3,6 +3,7 @@ import { Search, Download, Eye, Edit2, Trash2 } from "lucide-react";
 import { apiFetch, API_BASE } from "../lib/api";
 import { downloadCSV, fileStamp } from "../lib/reports";
 import { PageError, num } from "./PageStatus";
+import { alertDialog, confirmDialog } from "../lib/dialog";
 
 // Same colour for a student every time, whatever the filter.
 const avatarColor = (id: string) => {
@@ -78,7 +79,7 @@ const [loading, setLoading] = useState(true);
 
   const resetPassword = async () => {
     if (!editing) return;
-    if (!window.confirm(`Reset the password for ${editing.name}? Their current password will stop working.`)) return;
+    if (!(await confirmDialog({ title: "Reset password?", message: `${editing.name}'s current password will stop working. You'll get a temporary password to give them.`, confirmText: "Reset Password", tone: "warning" }))) return;
 
     try {
       const response = await apiFetch(
@@ -128,7 +129,7 @@ const [loading, setLoading] = useState(true);
   };
 
   const deleteStudent = async (s: Student) => {
-    if (!window.confirm(`Delete ${s.name} (${s.id})? This also removes their login account.`)) return;
+    if (!(await confirmDialog({ title: "Delete student?", message: `${s.name} (${s.id}) and their login account will be permanently removed.`, confirmText: "Delete", tone: "danger" }))) return;
 
     try {
       const response = await apiFetch(`/api/auth/students/${encodeURIComponent(s.id)}`, {
@@ -137,14 +138,14 @@ const [loading, setLoading] = useState(true);
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.message || "Failed to delete student.");
+        alertDialog(data.message || "Failed to delete student.");
         return;
       }
 
       if (selected?.id === s.id) setSelected(null);
       fetchStudents();
     } catch {
-      alert("Cannot connect to server.");
+      alertDialog("Cannot connect to server.");
     }
   };
 

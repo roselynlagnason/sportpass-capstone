@@ -6,8 +6,11 @@ import {
   dayNumber,
   dayWhen,
   loadDays,
+  closingPassed,
+  clockLabel,
   type SportfestDay,
 } from "../lib/sportfestDays";
+import { alertDialog } from "../lib/dialog";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -38,6 +41,7 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [notify, setNotify] = useState(true);
+  const [closesAt, setClosesAt] = useState("17:00");
   const [busy, setBusy] = useState(false);
   const [panelMessage, setPanelMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -72,6 +76,7 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
       setAdding(null);
       setSelectedId(existing.day_id);
       setTitle(existing.title || "");
+      setClosesAt(existing.closes_at || "");
       return;
     }
     setSelectedId(null);
@@ -83,6 +88,7 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
     setAdding(key);
     setTitle("");
     setNotify(true);
+    setClosesAt("17:00");
   };
 
   const call = async (path: string, init: RequestInit, okText: string) => {
@@ -113,7 +119,7 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sportfest_date: adding, title: title.trim(), notify }),
+        body: JSON.stringify({ sportfest_date: adding, title: title.trim(), notify, closes_at: closesAt || null }),
       },
       notify ? "Sportfest day added. Students have been notified." : "Sportfest day added."
     );
@@ -131,6 +137,14 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
       "Title saved."
     );
 
+  const saveClosingTime = () =>
+    selected &&
+    call(
+      `/api/attendance/days/${selected.day_id}`,
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ closes_at: closesAt || null }) },
+      closesAt ? `This day now closes automatically at ${clockLabel(closesAt)}.` : "Closing time removed. Close the day by hand."
+    );
+
   const setStatus = (status: "open" | "closed") =>
     selected &&
     call(
@@ -139,11 +153,38 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
       status === "closed" ? "Day closed. Its fines are now final." : "Day reopened."
     );
 
-  const removeDay = async () => {
+  // Cancelling a day: a window to confirm it and announce it to students.
+  const [cancelling, setCancelling] = useState<{ notify: boolean; title: string; message: string } | null>(null);
+
+  const removeDay = () => {
     if (!selected) return;
-    if (!window.confirm(`Remove ${longDate(selected.date_key)} as a sportfest day?`)) return;
-    const data = await call(`/api/attendance/days/${selected.day_id}`, { method: "DELETE" }, "Sportfest day removed.");
-    if (data) setSelectedId(null);
+    const when = longDate(selected.date_key);
+    setCancelling({
+      notify: true,
+      title: `Sportfest day cancelled: ${when}`,
+      message: `${selected.title ? `${selected.title} (${when})` : when} has been cancelled. There is no attendance and no fines for this day. Please watch for further announcements.`,
+    });
+  };
+
+  const confirmRemove = async () => {
+    if (!selected || !cancelling) return;
+    const data = await call(
+      `/api/attendance/days/${selected.day_id}`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notify: cancelling.notify,
+          announce_title: cancelling.title,
+          announce_message: cancelling.message,
+        }),
+      },
+      cancelling.notify ? "Sportfest day removed. Students have been notified." : "Sportfest day removed."
+    );
+    if (data) {
+      setCancelling(null);
+      setSelectedId(null);
+    }
   };
 
   // Calendar cells for the month in view.
@@ -207,7 +248,7 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
                     borderColor: isActive ? "var(--primary)" : "var(--border)",
                     borderWidth: isActive ? 2 : 1,
                     background: day
-                      ? day.status === "closed"
+                      ? (day.status === "closed" || closingPassed(day))
                         ? "#6B728012"
                         : "color-mix(in srgb, var(--primary) 12%, transparent)"
                       : "transparent",
@@ -221,7 +262,7 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
                     {Number(key.slice(8))}
                   </span>
                   {day && (
-                    <span className="mt-auto text-[11px] font-semibold leading-tight" style={{ color: day.status === "closed" ? "#6B7280" : "var(--primary)" }}>
+                    <span className="mt-auto text-[11px] font-semibold leading-tight" style={{ color: (day.status === "closed" || closingPassed(day)) ? "#6B7280" : "var(--primary)" }}>
                       <span className="hidden sm:inline">Day </span>{dayNumber(day, days)}
                       {day.title && <span className="hidden sm:block font-normal text-muted-foreground truncate">{day.title}</span>}
                     </span>
@@ -250,6 +291,15 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
               <div>
                 <label htmlFor="day-title" className="text-sm font-semibold text-foreground mb-1.5 block">Title (optional)</label>
                 <input id="day-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Opening Day, Basketball Finals" className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none" style={inputStyle} />
+              </div>
+              <div>
+                <label htmlFor="day-closes" className="text-sm font-semibold text-foreground mb-1.5 block">Closing time</label>
+                <input id="day-closes" type="time" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none" style={inputStyle} />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {closesAt
+                    ? `Scanning stops and fines become final at ${clockLabel(closesAt)}. Clear it to close the day by hand.`
+                    : "No closing time: close the day by hand."}
+                </p>
               </div>
               <label className="flex items-center gap-2 text-sm text-foreground">
                 <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
@@ -292,9 +342,19 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
                 </div>
               </div>
 
+              <div>
+                <label htmlFor="day-closes-edit" className="text-sm font-semibold text-foreground mb-1.5 block">Closing time</label>
+                <div className="flex gap-2">
+                  <input id="day-closes-edit" type="time" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} className="flex-1 min-w-0 px-4 py-2.5 rounded-xl border text-sm outline-none" style={inputStyle} />
+                  <button onClick={saveClosingTime} disabled={busy} className="px-3 rounded-xl border text-sm font-semibold" style={{ borderColor: "var(--border)" }}>Save</button>
+                </div>
+              </div>
+
               <p className="text-xs text-muted-foreground">
-                {dayWhen(selected) === "today"
-                  ? "Today: officers can scan students on the Attendance page."
+                {closingPassed(selected)
+                  ? `This day closed automatically at ${clockLabel(selected.closes_at)}; its fines are final.`
+                  : dayWhen(selected) === "today"
+                  ? `Today: officers can scan students on the Attendance page${selected.closes_at ? ` until ${clockLabel(selected.closes_at)}` : ""}.`
                   : dayWhen(selected) === "upcoming"
                   ? "Scanning opens on this date."
                   : "This day has passed; its fines are final."}{" "}
@@ -388,6 +448,63 @@ export function SportfestDays({ setScreen }: { setScreen?: (screen: any) => void
           </div>
         )}
       </div>
+
+      {cancelling && selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(15, 23, 42, 0.55)" }}
+          onMouseDown={(e) => e.target === e.currentTarget && setCancelling(null)}
+        >
+          <div role="dialog" aria-modal="true" className="w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl max-h-[90dvh] overflow-y-auto" style={{ background: "var(--card)" }}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#EF444418", color: "#EF4444" }}>
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-foreground">Cancel this sportfest day?</h3>
+                <p className="text-xs text-muted-foreground">{longDate(selected.date_key)} will be removed from the calendar.</p>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
+              <input type="checkbox" checked={cancelling.notify} onChange={(e) => setCancelling({ ...cancelling, notify: e.target.checked })} />
+              Announce the cancellation to students
+            </label>
+
+            {cancelling.notify && (
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="cancel-title" className="text-sm font-semibold text-foreground mb-1.5 block">Announcement title</label>
+                  <input id="cancel-title" maxLength={150} value={cancelling.title} onChange={(e) => setCancelling({ ...cancelling, title: e.target.value })} className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none" style={inputStyle} />
+                </div>
+                <div>
+                  <label htmlFor="cancel-message" className="text-sm font-semibold text-foreground mb-1.5 block">Message</label>
+                  <textarea id="cancel-message" rows={4} maxLength={2000} value={cancelling.message} onChange={(e) => setCancelling({ ...cancelling, message: e.target.value })} className="w-full px-4 py-2.5 rounded-xl border text-sm outline-none resize-y" style={inputStyle} />
+                </div>
+              </div>
+            )}
+
+            {panelMessage && !panelMessage.ok && (
+              <p className="text-sm mt-3" style={{ color: "#EF4444" }}>{panelMessage.text}</p>
+            )}
+
+            <div className="flex gap-3 mt-5">
+              <button type="button" onClick={() => setCancelling(null)} className="flex-1 py-2.5 rounded-xl border text-sm font-semibold hover:bg-muted" style={{ borderColor: "var(--border)" }}>
+                Keep Day
+              </button>
+              <button
+                type="button"
+                onClick={confirmRemove}
+                disabled={busy || (cancelling.notify && (!cancelling.title.trim() || !cancelling.message.trim()))}
+                className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-50"
+                style={{ background: "#EF4444" }}
+              >
+                {busy ? "Removing…" : cancelling.notify ? "Remove & Notify" : "Remove Day"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

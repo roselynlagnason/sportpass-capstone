@@ -49,6 +49,12 @@ router.post("/register", upload.singlePhoto("profile_photo"), async (req, res) =
     return res.status(400).json({ message: "Please enter a valid email address." });
   }
 
+  // Only school email addresses can register (default @cec.edu.ph).
+  const schoolDomain = (process.env.SCHOOL_EMAIL_DOMAIN || "cec.edu.ph").toLowerCase();
+  if (!String(email).trim().toLowerCase().endsWith(`@${schoolDomain}`)) {
+    return res.status(400).json({ message: `Use your school email address (ending in @${schoolDomain}).` });
+  }
+
   if (String(password).length < 8) {
     return res.status(400).json({ message: "Password must be at least 8 characters." });
   }
@@ -87,7 +93,7 @@ router.post("/register", upload.singlePhoto("profile_photo"), async (req, res) =
           if (userErr) {
             return conn.rollback(() => {
               if (userErr.code === "ER_DUP_ENTRY") {
-                return res.status(400).json({ message: "Email already exists" });
+                return res.status(400).json({ message: "An account with this email already exists. Log in instead, or ask an administrator to reset your password." });
               }
               return res.status(500).json({ message: "User insert error" });
             });
@@ -121,7 +127,7 @@ router.post("/register", upload.singlePhoto("profile_photo"), async (req, res) =
               if (studentErr) {
                 return conn.rollback(() => {
                   if (studentErr.code === "ER_DUP_ENTRY") {
-                    return res.status(400).json({ message: "Student ID already exists" });
+                    return res.status(400).json({ message: "This student ID already has an account. If it isn't yours, contact an administrator." });
                   }
                   return res.status(500).json({ message: "Student insert error" });
                 });

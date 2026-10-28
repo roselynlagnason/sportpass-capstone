@@ -8,6 +8,7 @@ import {
 import { API_BASE, apiFetch } from "../lib/api";
 import { startAutoSync } from "../lib/offlineQueue";
 import { SyncStatus } from "./SyncStatus";
+import { alertDialog, confirmDialog } from "../lib/dialog";
 
 export type Screen =
   | "login" | "register"
@@ -15,7 +16,7 @@ export type Screen =
   | "students" | "activities"
   | "attendance" | "fines" | "rankings" | "reports" | "settings"
   | "qr-code" | "attendance-history" | "passport" | "my-fines"
-  | "notifications" | "profile" | "activity-scanner" | "performance" | "sportfest-days";
+  | "notifications" | "profile" | "activity-scanner" | "performance" | "sportfest-days" | "calendar";
 
 export type Role = "admin" | "student";
 
@@ -52,6 +53,7 @@ const navItems: NavItem[] = [
 
   { icon: <LayoutDashboard size={18} />, label: "Dashboard", screen: "student-dashboard", roles: ["student"] },
   { icon: <QrCode size={18} />, label: "My QR Code", screen: "qr-code", roles: ["student"] },
+  { icon: <CalendarDays size={18} />, label: "Sportfest Calendar", screen: "calendar", roles: ["student"] },
   { icon: <History size={18} />, label: "Attendance History", screen: "attendance-history", roles: ["student"] },
   { icon: <Calendar size={18} />, label: "Activities", screen: "activities", roles: ["student"] },
   { icon: <ScanLine size={18} />, label: "Activity Scanner", screen: "activity-scanner", roles: ["student"] },
@@ -84,7 +86,18 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
   // Send scans saved offline as soon as there's a connection.
   useEffect(() => startAutoSync(), []);
 
-  // Students: count unread notifications for the bell badge.
+  // Students: count unread notifications for the bell badge. Refreshes when
+  // the page changes, when one is read, and every minute for new ones.
+  const [bellTick, setBellTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setBellTick((t) => t + 1);
+    window.addEventListener("sportpass-notifications-changed", bump);
+    const timer = window.setInterval(bump, 60000);
+    return () => {
+      window.removeEventListener("sportpass-notifications-changed", bump);
+      window.clearInterval(timer);
+    };
+  }, []);
   useEffect(() => {
     if (role !== "student" || !user?.student_id) return;
     let cancelled = false;
@@ -99,7 +112,7 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
     return () => {
       cancelled = true;
     };
-  }, [role, user?.student_id, currentScreen]);
+  }, [role, user?.student_id, currentScreen, bellTick]);
 
   const filteredNav = navItems.filter(item => item.roles.includes(role));
 
@@ -197,14 +210,14 @@ export function Layout({ currentScreen, setScreen, role, onLogout, children }: L
           </div>
 
           <button
-            onClick={() => {
-              const confirmLogout = window.confirm(
-                "Are you sure you want to log out?"
-              );
-
-              if (confirmLogout) {
-                onLogout();
-              }
+            onClick={async () => {
+              const ok = await confirmDialog({
+                title: "Log out?",
+                message: "You'll need to log in again to use SPORTPASS.",
+                confirmText: "Log Out",
+                icon: "logout",
+              });
+              if (ok) onLogout();
             }}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-white/45 hover:text-white hover:bg-white/8 text-sm transition-all"
           >

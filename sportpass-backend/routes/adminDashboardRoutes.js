@@ -23,7 +23,7 @@ router.get("/", requireAdmin, (req, res) => {
     // Unpaid fines only, using the same rules as the Fines page.
     const fines = allFinesQuery();
     const fineSql = `
-      SELECT COALESCE(SUM(f.amount), 0) AS outstanding_fines
+      SELECT COALESCE(SUM(f.balance), 0) AS outstanding_fines
       FROM (${fines.sql}) AS f
       WHERE f.payment_status <> 'paid'
     `;

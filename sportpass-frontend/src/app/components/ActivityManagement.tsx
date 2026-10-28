@@ -14,6 +14,7 @@ import {
 import { apiFetch } from "../lib/api";
 import { getSettings } from "../lib/settings";
 import { dayLabel, dayWhen, loadDays, type SportfestDay } from "../lib/sportfestDays";
+import { alertDialog, confirmDialog } from "../lib/dialog";
 
 // MySQL dates arrive as UTC timestamps; read them in local (Philippine)
 // time so editing an activity doesn't move it back a day.
@@ -135,7 +136,7 @@ export function ActivityManagement() {
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.message || "Unable to load QR codes.");
+        alertDialog(data.message || "Unable to load QR codes.");
         return false;
       }
 
@@ -143,7 +144,7 @@ export function ActivityManagement() {
       setQrSecondsLeft(Number(data[0]?.expires_in) || 120);
       return true;
     } catch {
-      alert("Cannot connect to server.");
+      alertDialog("Cannot connect to server.");
       return false;
     } finally {
       qrLoading.current = false;
@@ -178,7 +179,7 @@ export function ActivityManagement() {
 
   const saveActivity = async () => {
     if (!form.sport_name || !form.activity_name || !form.activity_date) {
-      alert("Please fill in sport, activity name, and date.");
+      alertDialog("Please fill in sport, activity name, and date.", { tone: "warning" });
       return;
     }
 
@@ -205,18 +206,18 @@ export function ActivityManagement() {
     const data = await response.json();
 
     if (!response.ok) {
-      alert(data.message || "Something went wrong.");
+      alertDialog(data.message || "Something went wrong.");
       return;
     }
 
-    alert(data.message);
+    alertDialog(data.message || "Activity saved.", { tone: "success" });
     setShowCreate(false);
     resetForm();
     fetchActivities();
   };
 
   const deleteActivity = async (id: number) => {
-    if (!confirm("Delete this activity?")) return;
+    if (!(await confirmDialog({ title: "Delete this activity?", message: "The activity and its QR codes will be removed. This can't be undone.", confirmText: "Delete", tone: "danger" }))) return;
 
     const response = await apiFetch(`/api/activities/${id}`, {
       method: "DELETE",
@@ -225,11 +226,11 @@ export function ActivityManagement() {
     const data = await response.json();
 
     if (!response.ok) {
-      alert(data.message || "Delete failed.");
+      alertDialog(data.message || "Delete failed.");
       return;
     }
 
-    alert(data.message);
+    alertDialog(data.message || "Done.", { tone: "success" });
     fetchActivities();
   };
 

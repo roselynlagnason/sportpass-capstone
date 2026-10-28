@@ -7,6 +7,7 @@ export type SportfestDay = {
   date_key: string; // "YYYY-MM-DD"
   title: string | null;
   status: "open" | "closed";
+  closes_at?: string | null; // "17:00": the day closes by itself at this time
   is_today: number | boolean;
   is_over: number | boolean;
   present: number;
@@ -53,13 +54,29 @@ export function dayWhen(day: SportfestDay): "today" | "upcoming" | "past" {
   return day.date_key > t ? "upcoming" : "past";
 }
 
-// Same rule as the server: fines count once the day is closed or has passed.
+// "17:00" -> "5:00 PM"
+export function clockLabel(t?: string | null) {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+// Today's closing time has passed (the day closed by itself).
+export function closingPassed(day: SportfestDay) {
+  if (dayWhen(day) !== "today" || !day.closes_at) return false;
+  const now = new Date();
+  const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return hhmm >= day.closes_at.slice(0, 5);
+}
+
+// Same rule as the server: fines count once the day is closed, its closing
+// time has passed, or its date has passed.
 export function dayFinesCount(day: SportfestDay) {
-  return day.status === "closed" || dayWhen(day) === "past";
+  return day.status === "closed" || dayWhen(day) === "past" || closingPassed(day);
 }
 
 export function dayCanScan(day: SportfestDay) {
-  return dayWhen(day) === "today" && day.status === "open";
+  return dayWhen(day) === "today" && day.status === "open" && !closingPassed(day);
 }
 
 // "Day 2 of 5" style number, by date order.

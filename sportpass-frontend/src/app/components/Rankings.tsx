@@ -22,6 +22,7 @@ import {
 import type { Role } from "./Layout";
 import { apiFetch } from "../lib/api";
 import { rewardFor } from "../lib/rewards";
+import { alertDialog } from "../lib/dialog";
 
 type View = "individual" | "year level" | "awards";
 
@@ -75,7 +76,7 @@ export function Rankings({ role }: Props) {
         const data = await response.json();
         setRankings(data);
       } catch {
-        alert("Failed to load rankings.");
+        alertDialog("Failed to load rankings.");
       } finally {
         setLoading(false);
       }

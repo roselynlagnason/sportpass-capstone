@@ -15,6 +15,8 @@ import {
   type SportfestDay,
 } from "../lib/sportfestDays";
 import { getSettings } from "../lib/settings";
+import { alertDialog } from "../lib/dialog";
+import { FinePaymentModal, type FineForPayment } from "./FinePaymentModal";
 
 interface Props {
   setScreen?: (screen: any) => void;
@@ -49,8 +51,13 @@ interface AttendanceRecord {
   // false while the day is still going: the fine is worked out from the
   // scans so far and becomes final when the day is closed or has passed.
   fine_final: boolean;
-  payment_status: "paid" | "unpaid" | "none";
+  amount_paid: number;
+  balance: number;
+  payment_note: string | null; // latest note on a payment
+  payment_status: "paid" | "partial" | "unpaid" | "none";
 }
+
+const money = (n: number) => `₱${Number(n || 0).toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
 
 function formatTime(time: string | null) {
   if (!time) return "";
@@ -114,7 +121,7 @@ export function FineMonitoring({ setScreen }: Props) {
       }
     } catch (error) {
       console.error("Failed to load sportfest days:", error);
-      alert("Failed to load sportfest days.");
+      alertDialog("Failed to load sportfest days.");
     }
   };
 
@@ -176,17 +183,23 @@ export function FineMonitoring({ setScreen }: Props) {
 
           fine_final: Number(record.fine_final) === 1 || record.fine_final === true,
 
+          amount_paid: Number(record.amount_paid || 0),
+
+          balance: Number(record.balance ?? record.fine ?? 0),
+
+          payment_note: record.payment_note || null,
+
           payment_status:
-            record.payment_status === "paid"
-              ? "paid"
-              : Number(record.fine || 0) > 0
-              ? "unpaid"
-              : "none",
+            Number(record.fine || 0) <= 0
+              ? "none"
+              : ["paid", "partial"].includes(record.payment_status)
+              ? record.payment_status
+              : "unpaid",
         }))
       );
     } catch (error) {
       console.error("Failed to load attendance:", error);
-      alert("Failed to load attendance records.");
+      alertDialog("Failed to load attendance records.");
       setRecords([]);
     } finally {
       setLoadingAttendance(false);
@@ -215,66 +228,20 @@ export function FineMonitoring({ setScreen }: Props) {
    * ---------------------------------------------------------
    */
 
-  const markPaid = async (record: AttendanceRecord) => {
-    /*
-     * A student who is absent has no attendance_id.
-     *
-     * Therefore the automatic_fines table is used for absent
-     * students. For students who have an attendance record,
-     * the normal attendance endpoint is used.
-     */
+  const [paying, setPaying] = useState<FineForPayment | null>(null);
 
-    try {
-      if (record.attendance_id) {
-        const response = await apiFetch(
-          `/api/fines/${record.attendance_id}/mark-paid`,
-          {
-            method: "PUT",
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to mark attendance fine as paid.");
-        }
-      } else {
-        /*
-         * Absent students don't have an attendance record yet.
-         * The backend records one, marked as paid.
-         */
-        const response = await apiFetch(
-          `/api/fines/absence/${selectedDay}/${record.student_id}/mark-paid`,
-          {
-            method: "PUT",
-          }
-        );
-
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          throw new Error(data.message || "Failed to mark absence fine as paid.");
-        }
-      }
-
-      /*
-       * Update the table immediately.
-       */
-      setRecords((previous) =>
-        previous.map((item) =>
-          item.student_id === record.student_id
-            ? {
-                ...item,
-                payment_status: "paid",
-              }
-            : item
-        )
-      );
-    } catch (error) {
-      console.error(error);
-      alert(
-        error instanceof Error && error.message
-          ? error.message
-          : "Failed to mark fine as paid."
-      );
-    }
+  // Opens the payment window for one student's fine on this day.
+  const openPayment = (record: AttendanceRecord) => {
+    const day = days.find((d) => d.day_id === selectedDay);
+    setPaying({
+      student_id: record.student_id,
+      name: `${record.first_name} ${record.last_name}`,
+      dayLabel: day ? dayLongLabel(day) : "Sportfest day",
+      day_id: selectedDay,
+      fine: Number(record.fine || 0),
+      amount_paid: Number(record.amount_paid || 0),
+      balance: Number(record.balance || 0),
+    });
   };
 
   /*
@@ -319,14 +286,12 @@ export function FineMonitoring({ setScreen }: Props) {
     0
   );
 
-  const totalPaid = records
-    .filter((record) => record.payment_status === "paid")
-    .reduce(
-      (sum, record) => sum + Number(record.fine || 0),
-      0
-    );
+  const totalPaid = records.reduce(
+    (sum, record) => sum + Number(record.amount_paid || 0),
+    0
+  );
 
-  const totalOutstanding = totalIssued - totalPaid;
+  const totalOutstanding = Math.max(0, totalIssued - totalPaid);
 
   /*
    * ---------------------------------------------------------
@@ -508,7 +473,7 @@ export function FineMonitoring({ setScreen }: Props) {
             className="text-2xl font-heading font-bold"
             style={{ color: "#10B981" }}
           >
-            ₱{totalPaid}
+            {money(totalPaid)}
           </p>
 
           <p className="text-xs font-semibold text-foreground mt-0.5">
@@ -516,11 +481,8 @@ export function FineMonitoring({ setScreen }: Props) {
           </p>
 
           <p className="text-xs text-muted-foreground">
-            {
-              records.filter(
-                (r) => r.payment_status === "paid"
-              ).length
-            } paid
+            {records.filter((r) => r.payment_status === "paid").length} paid ·{" "}
+            {records.filter((r) => r.payment_status === "partial").length} partial
           </p>
         </div>
 
@@ -545,7 +507,7 @@ export function FineMonitoring({ setScreen }: Props) {
             className="text-2xl font-heading font-bold"
             style={{ color: "#EF4444" }}
           >
-            ₱{totalOutstanding}
+            {money(totalOutstanding)}
           </p>
 
           <p className="text-xs font-semibold text-foreground mt-0.5">
@@ -667,7 +629,7 @@ export function FineMonitoring({ setScreen }: Props) {
 
         <div className="overflow-x-auto">
 
-          <table className="w-full min-w-[720px]">
+          <table className="w-full min-w-[980px]">
 
             <thead>
 
@@ -686,7 +648,10 @@ export function FineMonitoring({ setScreen }: Props) {
                   "Time Out",
                   "Status",
                   "Fine",
+                  "Paid",
+                  "Balance",
                   "Payment Status",
+                  "Notes",
                   "Action",
                 ].map((heading) => (
                   <th
@@ -712,7 +677,7 @@ export function FineMonitoring({ setScreen }: Props) {
 
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={11}
                     className="px-5 py-10 text-center text-sm text-muted-foreground"
                   >
                     Loading attendance records...
@@ -723,7 +688,7 @@ export function FineMonitoring({ setScreen }: Props) {
 
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={11}
                     className="px-5 py-10 text-center text-sm text-muted-foreground"
                   >
                     No attendance records found.
@@ -935,98 +900,80 @@ export function FineMonitoring({ setScreen }: Props) {
 
                       </td>
 
+                      {/* PAID */}
+
+                      <td className="px-5 py-3.5 text-sm font-semibold whitespace-nowrap" style={{ color: record.amount_paid > 0 ? "#10B981" : "var(--muted-foreground)" }}>
+                        {Number(record.fine) > 0 && record.fine_final ? money(record.amount_paid) : "–"}
+                      </td>
+
+                      {/* BALANCE */}
+
+                      <td className="px-5 py-3.5 text-sm font-bold whitespace-nowrap" style={{ color: record.balance > 0 ? "#EF4444" : "#10B981" }}>
+                        {Number(record.fine) > 0 && record.fine_final ? money(record.balance) : "–"}
+                      </td>
+
                       {/* PAYMENT STATUS */}
 
                       <td className="px-5 py-3.5">
+                        {(() => {
+                          if (Number(record.fine) <= 0)
+                            return <span className="text-xs text-green-600 font-semibold">No Fine</span>;
+                          const look = !record.fine_final
+                            ? { label: "Pending", bg: "#F59E0B20", fg: "#B45309" }
+                            : record.payment_status === "paid"
+                            ? { label: "Paid", bg: "#10B98120", fg: "#10B981" }
+                            : record.payment_status === "partial"
+                            ? { label: "Partial", bg: "#3B82F620", fg: "#2563EB" }
+                            : { label: "Unpaid", bg: "#EF444420", fg: "#EF4444" };
+                          return (
+                            <span
+                              className="text-xs px-2.5 py-1 rounded-full font-semibold whitespace-nowrap"
+                              style={{ background: look.bg, color: look.fg }}
+                              title={!record.fine_final ? "Final when this sportfest day is closed or has passed" : undefined}
+                            >
+                              {look.label}
+                            </span>
+                          );
+                        })()}
+                      </td>
 
-                        {Number(record.fine) > 0 && !record.fine_final ? (
+                      {/* NOTES */}
 
-                          <span
-                            className="text-xs px-2.5 py-1 rounded-full font-semibold"
-                            style={{ background: "#F59E0B20", color: "#B45309" }}
-                            title="Final when this sportfest day is closed or has passed"
-                          >
-                            Pending
+                      <td className="px-5 py-3.5 max-w-[200px]">
+                        {record.payment_note ? (
+                          <span className="text-xs text-muted-foreground line-clamp-2" title={record.payment_note}>
+                            {record.payment_note}
                           </span>
-
-                        ) : Number(record.fine) > 0 ? (
-
-                          <span
-                            className="text-xs px-2.5 py-1 rounded-full font-semibold"
-                            style={{
-                              background:
-                                record.payment_status ===
-                                "paid"
-                                  ? "#10B98120"
-                                  : "#EF444420",
-
-                              color:
-                                record.payment_status ===
-                                "paid"
-                                  ? "#10B981"
-                                  : "#EF4444",
-                            }}
-                          >
-                            {record.payment_status ===
-                            "paid"
-                              ? "Paid"
-                              : "Unpaid"}
-                          </span>
-
                         ) : (
-
-                          <span className="text-xs text-green-600 font-semibold">
-                            No Fine
-                          </span>
-
+                          <span className="text-xs text-muted-foreground">–</span>
                         )}
-
                       </td>
 
                       {/* ACTION */}
 
                       <td className="px-5 py-3.5">
-
                         {Number(record.fine) > 0 && !record.fine_final ? (
-
-                          <span className="text-xs text-muted-foreground">
-                            Collect after the day closes
-                          </span>
-
+                          <span className="text-xs text-muted-foreground">Collect after the day closes</span>
                         ) : Number(record.fine) > 0 ? (
-
-                          record.payment_status ===
-                          "paid" ? (
-
-                            <span className="text-xs text-green-600 font-semibold">
-                              Settled
-                            </span>
-
-                          ) : (
-
+                          record.payment_status === "paid" ? (
                             <button
-                              onClick={() =>
-                                markPaid(record)
-                              }
-                              className="text-xs px-3 py-1.5 rounded-xl font-bold text-white hover:opacity-80 transition-all"
-                              style={{
-                                background:
-                                  "#10B981",
-                              }}
+                              onClick={() => openPayment(record)}
+                              className="text-xs font-semibold text-green-600 hover:underline"
                             >
-                              Mark Paid
+                              Settled · View
                             </button>
-
+                          ) : (
+                            <button
+                              onClick={() => openPayment(record)}
+                              className="text-xs px-3 py-1.5 rounded-xl font-bold text-white hover:opacity-80 transition-all whitespace-nowrap"
+                              style={{ background: "#10B981" }}
+                            >
+                              {record.payment_status === "partial" ? "Add Payment" : "Record Payment"}
+                            </button>
                           )
-
                         ) : (
-
-                          <span className="text-xs text-muted-foreground">
-                            No Action
-                          </span>
-
+                          <span className="text-xs text-muted-foreground">No Action</span>
                         )}
-
                       </td>
 
                     </tr>
@@ -1043,6 +990,14 @@ export function FineMonitoring({ setScreen }: Props) {
 
       </div>
 
+
+      {paying && (
+        <FinePaymentModal
+          fine={paying}
+          onClose={() => setPaying(null)}
+          onSaved={() => selectedDay !== null && fetchAttendance(selectedDay)}
+        />
+      )}
     </div>
   );
 }

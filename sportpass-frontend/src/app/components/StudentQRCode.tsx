@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { Download, RefreshCw, Shield, Info } from "lucide-react";
 import { apiFetch } from "../lib/api";
+import { alertDialog } from "../lib/dialog";
 
 interface LoggedUser {
   user_id: number;
@@ -63,7 +64,7 @@ useEffect(() => {
     const canvas = qrRef.current?.querySelector("canvas");
 
     if (!canvas) {
-      alert("QR Code not found.");
+      alertDialog("QR Code not found.");
       return;
     }
 

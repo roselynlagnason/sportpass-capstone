@@ -31,10 +31,11 @@ const fakeDb = {
     if (/SELECT photo_data, photo_type FROM students/.test(sql)) { rows = scenario.photo ? [{ photo_data: Buffer.from([137, 80, 78, 71]), photo_type: 'image/png' }] : []; return setImmediate(() => cb(null, rows)); }
     if (/SELECT day_id FROM sportfest_days WHERE sportfest_date/.test(sql)) { rows = scenario.isDay ? [{ day_id: 3 }] : []; return setImmediate(() => cb(null, rows)); }
     if (/FROM offline_scans WHERE client_id/.test(sql)) { rows = scenario.seen ? [{ status_code: 200, response: JSON.stringify({ action: "time_in", message: "Time-in recorded successfully." }) }] : []; return setImmediate(() => cb(null, rows)); }
+    if (/JOIN sportfest_days sd ON sd.day_id = \?/.test(sql)) { rows = [{ amount: 60, legacy_paid: 0, paid_raw: scenario.paid ?? 0, is_over: scenario.over ?? 1 }]; return setImmediate(() => cb(null, rows)); }
     if (/information_schema/.test(sql)) rows = [{ n: 1 }];
     else if (/AS records/.test(sql)) rows = [{ records: scenario.records ?? 0 }];
     else if (/AS is_past/.test(sql)) rows = [{ is_past: scenario.past ? 1 : 0 }];
-    else if (/is_today/.test(sql)) rows = [{ is_today: scenario.today ?? 1, status: "ongoing" }];
+    else if (/is_today/.test(sql)) rows = [{ is_today: scenario.today ?? 1, status: "ongoing", after_closing: scenario.afterClosing ? 1 : 0, closes_at: "17:00" }];
     else if (/seconds_since_time_in/.test(sql)) rows = scenario.existing ? [{ attendance_id: 1, time_out: null, seconds_since_time_in: 20 }] : [];
     else if (/FROM students WHERE student_id = \? AND user_id/.test(sql)) rows = [{ first_name: "Ana", last_name: "Cruz" }];
     else if (/SELECT activity_id, (participation_points|sport_name)/.test(sql)) rows = [{ activity_id: 7, sport_name: "Chess", activity_name: "Finals", participation_points: 10, accomplishment_points: 20 }];
@@ -172,6 +173,62 @@ test("offline points wait (retry) until the time-in has synced", async () => {
   assert.ok(!queries.some((q) => /INSERT IGNORE INTO offline_scans/.test(q.sql)), "retry answers are not remembered");
 });
 expectStatus("offline points are added once timed in", "POST", "/api/participation/scan", student, { token: oldActivityQR, scanned_at: ago(500), client_id: cid(7) }, 200, { timedIn: true });
+
+expectStatus("scans after the day's closing time are refused", "POST", "/api/attendance/scan", admin, { token: studentQR, day_id: 3 }, 400, { today: 1, afterClosing: true });
+expectStatus("closing time must be HH:MM", "PUT", "/api/attendance/days/3", admin, { closes_at: "5pm" }, 400);
+expectStatus("admin sets a closing time", "PUT", "/api/attendance/days/3", admin, { closes_at: "17:00" }, 200);
+expectStatus("admin adds a day with a closing time", "POST", "/api/attendance/days", admin, { sportfest_date: "2030-01-16", closes_at: "16:30" }, 200, { past: false });
+
+// ---- closing time ------------------------------------------------------------
+expectStatus("scans after the day's closing time are refused", "POST", "/api/attendance/scan", admin, { token: studentQR, day_id: 3 }, 400, { today: 1, afterClosing: true });
+expectStatus("closing time must be HH:MM", "PUT", "/api/attendance/days/3", admin, { closes_at: "5pm" }, 400);
+expectStatus("admin sets a closing time", "PUT", "/api/attendance/days/3", admin, { closes_at: "17:00" }, 200);
+expectStatus("admin adds a day with a closing time", "POST", "/api/attendance/days", admin, { sportfest_date: "2030-01-16", closes_at: "16:30" }, 200, { past: false });
+
+// ---- partial payments ----------------------------------------------------------
+test("a partial payment leaves a balance", async () => {
+  scenario = { paid: 0 };
+  const r = await call("POST", "/api/fines/payments", admin, { student_id: "S1", day_id: 3, amount: 20, note: "Paid 20 at the booth" });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.payment_status, "partial");
+  assert.equal(r.json.balance, 40);
+});
+test("paying the rest settles the fine", async () => {
+  scenario = { paid: 20 };
+  const r = await call("POST", "/api/fines/payments", admin, { student_id: "S1", day_id: 3, amount: 40 });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.payment_status, "paid");
+});
+expectStatus("paying more than the balance is refused", "POST", "/api/fines/payments", admin, { student_id: "S1", day_id: 3, amount: 50 }, 400, { paid: 20 });
+expectStatus("a fully paid fine can't be paid again", "POST", "/api/fines/payments", admin, { student_id: "S1", day_id: 3, amount: 5 }, 400, { paid: 60 });
+expectStatus("no payments while the day is still open", "POST", "/api/fines/payments", admin, { student_id: "S1", day_id: 3, amount: 10 }, 400, { over: 0 });
+expectStatus("payment amount must be positive", "POST", "/api/fines/payments", admin, { student_id: "S1", day_id: 3, amount: -5 }, 400);
+expectStatus("students can't record payments", "POST", "/api/fines/payments", student, { student_id: "S1", day_id: 3, amount: 10 }, 403);
+expectStatus("student can see own payment history", "GET", "/api/fines/payments/S1?day_id=3", student, null, 200);
+expectStatus("student can't see another's payments", "GET", "/api/fines/payments/S2?day_id=3", student, null, 403);
+
+// ---- registration: school email only -------------------------------------------
+async function register(email) {
+  const { port } = server.address();
+  const fd = new FormData();
+  const fields = { student_id: "202611016", first_name: "Maria", last_name: "Santos", email, password: "password123",
+    year_level: "1st Year", gender: "Female", section: "A", contact: "09171234567" };
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  fd.append("profile_photo", new Blob([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])], { type: "image/png" }), "me.png");
+  const res = await fetch(`http://127.0.0.1:${port}/api/auth/register`, { method: "POST", body: fd });
+  return { status: res.status, json: await res.json().catch(() => null) };
+}
+test("registration refuses non-school emails", async () => {
+  scenario = {};
+  const r = await register("maria.santos@gmail.com");
+  assert.equal(r.status, 400);
+  assert.match(r.json.message, /school email/);
+});
+test("registration accepts a school email", async () => {
+  scenario = {};
+  const r = await register("santos.maria@cec.edu.ph");
+  assert.notEqual(r.status, 400, JSON.stringify(r.json));
+});
 
 // ---- sportfest days ----------------------------------------------------------
 expectStatus("student can't add a sportfest day", "POST", "/api/attendance/days", student, { sportfest_date: "2030-01-15" }, 403);

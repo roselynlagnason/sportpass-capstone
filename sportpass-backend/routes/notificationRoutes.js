@@ -39,11 +39,21 @@ router.get("/", requireAdmin, (req, res) => {
 });
 
 router.post("/", requireAdmin, (req, res) => {
-  const { title, message, type, recipient_role, created_by } = req.body;
+  const { type, recipient_role } = req.body;
+  const title = String(req.body.title || "").trim();
+  const message = String(req.body.message || "").trim();
 
   if (!title || !message) {
     return res.status(400).json({ message: "Title and message are required" });
   }
+  if (title.length > 150) {
+    return res.status(400).json({ message: "The title is too long (150 characters at most)." });
+  }
+  if (message.length > 2000) {
+    return res.status(400).json({ message: "The message is too long (2,000 characters at most)." });
+  }
+  const types = ["activity", "reminder", "ranking", "alert", "system"];
+  const roles = ["all", "student", "admin"];
 
   const sql = `
     INSERT INTO notifications
@@ -56,9 +66,9 @@ router.post("/", requireAdmin, (req, res) => {
     [
       title,
       message,
-      type || "system",
-      recipient_role || "all",
-      created_by || null,
+      types.includes(type) ? type : "system",
+      roles.includes(recipient_role) ? recipient_role : "all",
+      req.user ? req.user.user_id : null,
     ],
     (err) => {
       if (err) {

@@ -22,6 +22,7 @@ import {
 import { apiFetch } from "../lib/api";
 import { rewardFor } from "../lib/rewards";
 import { downloadCSV, fileStamp } from "../lib/reports";
+import { alertDialog } from "../lib/dialog";
 
 interface RankingStudent {
   rank: number;
@@ -74,7 +75,7 @@ export function PerformanceTracking() {
         if (me) setSelected(me);
       }
     } catch {
-      alert("Failed to load performance tracking data.");
+      alertDialog("Failed to load performance tracking data.");
     } finally {
       setLoading(false);
     }

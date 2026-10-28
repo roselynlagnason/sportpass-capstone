@@ -163,14 +163,20 @@ function fineSection(fines: any[]): ReportSection {
       { label: "Type", value: (r) => fineLabel[r.fine_type] || r.fine_type },
       { label: "Missed", value: (r) => [Number(r.missed_in) ? "Time-in" : "", Number(r.missed_out) ? "Time-out" : ""].filter(Boolean).join(" + ") },
       { label: "Amount", value: (r) => peso(r.amount) },
-      { label: "Status", value: (r) => (r.payment_status === "paid" ? "Paid" : "Unpaid") },
+      { label: "Paid", value: (r) => peso(r.amount_paid ?? (r.payment_status === "paid" ? r.amount : 0)) },
+      { label: "Balance", value: (r) => peso(r.balance ?? (r.payment_status === "paid" ? 0 : r.amount)) },
+      { label: "Status", value: (r) => (r.payment_status === "paid" ? "Paid" : r.payment_status === "partial" ? "Partial" : "Unpaid") },
+      { label: "Note", value: (r) => r.payment_note || "" },
     ],
   };
 }
 
 function fineTotals(fines: any[]) {
   const total = fines.reduce((s, f) => s + Number(f.amount || 0), 0);
-  const paid = fines.filter((f) => f.payment_status === "paid").reduce((s, f) => s + Number(f.amount || 0), 0);
+  const paid = fines.reduce(
+    (s, f) => s + Number(f.amount_paid ?? (f.payment_status === "paid" ? f.amount : 0) ?? 0),
+    0
+  );
   return [
     { label: "Fines issued", value: peso(total) },
     { label: "Collected", value: peso(paid) },

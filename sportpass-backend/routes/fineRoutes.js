@@ -5,6 +5,10 @@ const {
   finePerScan,
   DAY_IS_OVER,
   allFinesQuery,
+  attendanceFineAmount,
+  PAID_FOR_DAY,
+  PAID_FOR_MANUAL,
+  settle,
 } = require("../lib/fines");
 
 const router = express.Router();
@@ -159,6 +163,125 @@ router.put("/manual/:fine_id/mark-paid", requireAdmin, (req, res) => {
 
     res.json({ message: "Manual fine marked as paid" });
   });
+});
+
+/* ---------------------------------------------------------------------
+ * Payments, including partial payments.
+ * A fine is identified by student + sportfest day (missed scans or
+ * absence) or by fine_id (manual fine). Each payment is stored with its
+ * amount and an optional note; the balance is what is left.
+ * ------------------------------------------------------------------- */
+
+// Current fine, payments so far and balance for one fine.
+function loadFine({ student_id, day_id, fine_id }, cb) {
+  if (fine_id) {
+    return db.query(
+      `SELECT mf.amount, IF(mf.payment_status = 'paid', 1, 0) AS legacy_paid,
+              ${PAID_FOR_MANUAL("mf.fine_id")} AS paid_raw, 1 AS is_over
+       FROM manual_fines mf WHERE mf.fine_id = ? AND mf.student_id = ?`,
+      [fine_id, student_id],
+      (err, rows) => cb(err, rows && rows[0] ? settle(rows[0]) : null)
+    );
+  }
+  db.query(
+    `SELECT
+       CASE
+         WHEN d.attendance_id IS NULL THEN
+           IF(DATE(u.created_at) <= sd.sportfest_date, ${finePerScan() * 2}, 0)
+         ELSE ${attendanceFineAmount("d")}
+       END AS amount,
+       IF(d.payment_status = 'paid', 1, 0) AS legacy_paid,
+       ${PAID_FOR_DAY("s.student_id", "sd.day_id")} AS paid_raw,
+       ${DAY_IS_OVER} AS is_over
+     FROM students s
+     JOIN users u ON u.user_id = s.user_id
+     JOIN sportfest_days sd ON sd.day_id = ?
+     LEFT JOIN daily_attendance d ON d.student_id = s.student_id AND d.day_id = sd.day_id
+     WHERE s.student_id = ?`,
+    [day_id, student_id],
+    (err, rows) => cb(err, rows && rows[0] ? settle(rows[0]) : null)
+  );
+}
+
+/* ADMIN: record a payment (full or partial) toward a fine. */
+router.post("/payments", requireAdmin, (req, res) => {
+  const { student_id, day_id, fine_id } = req.body;
+  const amount = Math.round(Number(req.body.amount) * 100) / 100;
+  const note = req.body.note ? String(req.body.note).trim() : "";
+
+  if (!student_id || (!day_id && !fine_id)) {
+    return res.status(400).json({ message: "Missing student or fine." });
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ message: "Enter an amount greater than zero." });
+  }
+  if (note.length > 255) {
+    return res.status(400).json({ message: "The note is too long (255 characters at most)." });
+  }
+
+  loadFine({ student_id, day_id, fine_id }, (err, fine) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Database error" });
+    }
+    if (!fine || Number(fine.amount) <= 0) {
+      return res.status(404).json({ message: "There is no fine to pay here." });
+    }
+    if (!Number(fine.is_over)) {
+      return res.status(400).json({
+        message: "This sportfest day isn't over yet, so its fine isn't final. Close the day first.",
+      });
+    }
+    if (fine.balance <= 0) {
+      return res.status(400).json({ message: "This fine is already fully paid." });
+    }
+    if (amount > fine.balance) {
+      return res.status(400).json({
+        message: `That is more than the balance of ₱${fine.balance}.`,
+      });
+    }
+
+    db.query(
+      `INSERT INTO fine_payments (student_id, day_id, fine_id, amount, note, recorded_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [student_id, fine_id ? null : day_id, fine_id || null, amount, note || null, req.user.user_id],
+      (insErr) => {
+        if (insErr) {
+          console.error(insErr);
+          return res.status(500).json({ message: "Failed to record the payment." });
+        }
+        const balance = Math.round((fine.balance - amount) * 100) / 100;
+        res.json({
+          message: balance <= 0 ? "Fine fully paid." : `Partial payment recorded. ₱${balance} left to pay.`,
+          amount_paid: Math.round((fine.amount_paid + amount) * 100) / 100,
+          balance,
+          payment_status: balance <= 0 ? "paid" : "partial",
+        });
+      }
+    );
+  });
+});
+
+/* Payment history of one fine (the student or an admin). */
+router.get("/payments/:student_id", selfOrAdmin("student_id"), (req, res) => {
+  const { day_id, fine_id } = req.query;
+  if (!day_id && !fine_id) return res.status(400).json({ message: "Missing day or fine." });
+
+  db.query(
+    `SELECT fp.payment_id, fp.amount, fp.note, fp.paid_at, u.email AS recorded_by
+     FROM fine_payments fp
+     LEFT JOIN users u ON u.user_id = fp.recorded_by
+     WHERE fp.student_id = ? AND ${fine_id ? "fp.fine_id = ?" : "fp.day_id = ?"}
+     ORDER BY fp.paid_at ASC, fp.payment_id ASC`,
+    [req.params.student_id, fine_id || day_id],
+    (err, rows) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ message: "Database error" });
+      }
+      res.json(rows);
+    }
+  );
 });
 
 module.exports = router;

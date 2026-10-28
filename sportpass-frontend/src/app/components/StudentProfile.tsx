@@ -19,6 +19,7 @@ import {
 } from "recharts";
 import { apiFetch, API_BASE } from "../lib/api";
 import { ChangePassword } from "./ChangePassword";
+import { alertDialog } from "../lib/dialog";
 
 interface LoggedUser {
   user_id: number;
@@ -113,7 +114,7 @@ export function StudentProfile() {
 
         setFines(fineData.filter((f) => f.student_id === user.student_id));
       } catch {
-        alert("Failed to load profile data.");
+        alertDialog("Failed to load profile data.");
       } finally {
         setLoading(false);
       }
@@ -153,7 +154,7 @@ export function StudentProfile() {
 
   const outstandingFine = fines
     .filter((f) => f.payment_status !== "paid")
-    .reduce((sum, f) => sum + Number(f.amount || 0), 0);
+    .reduce((sum, f: any) => sum + Number(f.balance ?? f.amount ?? 0), 0);
 
   const chartData = [
     {
