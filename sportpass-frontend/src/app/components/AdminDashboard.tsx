@@ -63,6 +63,15 @@ interface DashboardData {
     year_level: string;
     total_points: string | number;
   }[];
+
+  // Unpaid fines per sportfest day (day_id null = manual fines).
+  fines_by_day?: {
+    day_id: number | null;
+    date: string;
+    name: string;
+    records: number;
+    outstanding: number;
+  }[];
 }
 
 const colors = [
@@ -656,7 +665,14 @@ value={peso(summary.outstanding_fines)}
             </p>
 
             <p className="text-xs text-red-700">
-              Some students have missing time-in or time-out scans.
+              {(data.fines_by_day ?? []).length > 0
+                ? (data.fines_by_day ?? [])
+                    .map((d) => `${d.day_id ? `${formatDate(d.date)}${d.name && !/^[A-Z][a-z]{2} \d/.test(d.name) ? ` (${d.name})` : ""}` : d.name}: ${peso(d.outstanding)}`)
+                    .join(" · ")
+                : "Some students have missing time-in or time-out scans."}
+            </p>
+            <p className="text-[11px] text-red-700/80 mt-0.5">
+              Total of all sportfest days that are closed or over. Today's and upcoming days are added once they close.
             </p>
           </div>
 

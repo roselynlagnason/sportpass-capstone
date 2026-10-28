@@ -22,14 +22,31 @@ router.get("/", requireAdmin, (req, res) => {
 
     // Unpaid fines only, using the same rules as the Fines page.
     const fines = allFinesQuery();
+    // Outstanding fines for every sportfest day (and manual fines), so the
+    // total can be checked day by day.
     const fineSql = `
-      SELECT COALESCE(SUM(f.balance), 0) AS outstanding_fines
+      SELECT
+        f.day_id,
+        MIN(f.attendance_date) AS fine_date,
+        MIN(f.activity_name) AS day_name,
+        COUNT(*) AS records,
+        COALESCE(SUM(f.balance), 0) AS outstanding
       FROM (${fines.sql}) AS f
       WHERE f.payment_status <> 'paid'
+      GROUP BY f.day_id
+      ORDER BY fine_date ASC
     `;
 
-    db.query(fineSql, fines.params, (fineErr, fineRows) => {
+    db.query(fineSql, fines.params, (fineErr, fineDayRows) => {
       if (fineErr) return res.status(500).json({ message: "Fine error" });
+      const finesByDay = (fineDayRows || []).map((r) => ({
+        day_id: r.day_id,
+        date: r.fine_date,
+        name: r.day_id ? r.day_name : "Manual fines",
+        records: Number(r.records || 0),
+        outstanding: Number(r.outstanding || 0),
+      }));
+      const fineRows = [{ outstanding_fines: finesByDay.reduce((s, d) => s + d.outstanding, 0) }];
 
       const rankingSql = `
         SELECT
@@ -114,9 +131,20 @@ router.get("/", requireAdmin, (req, res) => {
                   Number(summary.accomplishment_points || 0),
                 outstanding_fines: Number(fineRows[0].outstanding_fines || 0),
               },
-              top_students: ranked,
-              recent_activities: activityRows,
-              year_level_points: yearRows,
+              fines_by_day: finesByDay,
+              // Shapes the dashboard page reads.
+              topStudents: ranked
+                .filter((r) => Number(r.total_points) > 0)
+                .map((r) => ({
+                  ...r,
+                  student_name: `${r.first_name || ""} ${r.last_name || ""}`.trim(),
+                })),
+              recentActivities: activityRows,
+              yearLevelPoints: yearRows.map((y) => ({
+                year_level: y.year_level,
+                students: y.students,
+                total_points: Number(y.points || 0),
+              })),
             });
           });
         });
