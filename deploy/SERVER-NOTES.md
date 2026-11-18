@@ -4,7 +4,7 @@
 |---|---|
 | Server (Proxmox VM 105) | Ubuntu 24.04, user `ceccsdattendance` |
 | On campus | https://10.20.26.4 |
-| Public (once IT forwards port 1982) | https://103.142.9.22:1982 — school router forwards 1982 to 10.20.26.4:1982 |
+| Public (port given by the dean) | https://103.142.9.22:9182 — school router forwards 9182 to the server |
 | Off campus (Tailscale on) | https://100.106.104.6 — Tailscale gave this address; see login.tailscale.com > Machines |
 | First admin | admin@sportpass.local / ChangeMe@2026 — change it after first login |
 | Website files | /var/www/sportpass (Nginx) |
