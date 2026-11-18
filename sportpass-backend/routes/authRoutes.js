@@ -14,6 +14,27 @@ const settings = require("../lib/settings");
 
 const router = express.Router();
 
+// School student ID numbers: exactly 9 digits, e.g. 202310259.
+const STUDENT_ID_RE = /^\d{9}$/;
+
+// Lets the registration form tell a student right away whether their
+// student ID is valid and not yet registered. Says only yes/no.
+router.get("/check-student-id/:student_id", (req, res) => {
+  const id = String(req.params.student_id || "").trim();
+  if (!STUDENT_ID_RE.test(id)) {
+    return res.json({ valid: false, available: false, message: "Student ID must be exactly 9 digits, like 202310259." });
+  }
+  db.query("SELECT 1 FROM students WHERE student_id = ? LIMIT 1", [id], (err, rows) => {
+    if (err) return res.status(500).json({ message: "Could not check the student ID right now." });
+    const taken = Array.isArray(rows) && rows.length > 0;
+    res.json({
+      valid: true,
+      available: !taken,
+      message: taken ? "This student ID is already registered. If it's yours, log in instead, or contact an administrator." : "Student ID is available.",
+    });
+  });
+});
+
 router.post("/register", upload.singlePhoto("profile_photo"), async (req, res) => {
   const {
     student_id,
@@ -45,6 +66,11 @@ router.post("/register", upload.singlePhoto("profile_photo"), async (req, res) =
     return res.status(400).json({ message: "Please upload a profile photo." });
   }
 
+  // School student ID numbers are exactly 9 digits, e.g. 202310259.
+  if (!STUDENT_ID_RE.test(String(student_id).trim())) {
+    return res.status(400).json({ message: "Student ID must be exactly 9 digits, like 202310259." });
+  }
+
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) {
     return res.status(400).json({ message: "Please enter a valid email address." });
   }
@@ -55,8 +81,13 @@ router.post("/register", upload.singlePhoto("profile_photo"), async (req, res) =
     return res.status(400).json({ message: `Use your school email address (ending in @${schoolDomain}).` });
   }
 
-  if (String(password).length < 8) {
-    return res.status(400).json({ message: "Password must be at least 8 characters." });
+  // Standard password rules (same as the registration form).
+  const pw = String(password);
+  if (pw.length < 8 || pw.length > 64 || !/[A-Z]/.test(pw) || !/[a-z]/.test(pw) ||
+      !/\d/.test(pw) || !/[^A-Za-z0-9\s]/.test(pw) || /\s/.test(pw)) {
+    return res.status(400).json({
+      message: "Password must be 8+ characters with an uppercase letter, a lowercase letter, a number and a special character, and no spaces.",
+    });
   }
 
   try {

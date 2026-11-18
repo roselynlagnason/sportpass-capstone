@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Trophy, ArrowLeft, Upload, Check, AlertCircle, X } from "lucide-react";
+import { Trophy, ArrowLeft, Upload, Check, AlertCircle, X, Eye, EyeOff } from "lucide-react";
 import { apiFetch } from "../lib/api";
 import { alertDialog, confirmDialog } from "../lib/dialog";
 
@@ -59,6 +59,94 @@ function InputField({ label, value, type = "text", placeholder, error, autoCompl
   );
 }
 
+// Standard password rules, checked live while the student types.
+const PASSWORD_RULES: { label: string; test: (p: string) => boolean }[] = [
+  { label: "At least 8 characters", test: (p) => p.length >= 8 },
+  { label: "One uppercase letter (A-Z)", test: (p) => /[A-Z]/.test(p) },
+  { label: "One lowercase letter (a-z)", test: (p) => /[a-z]/.test(p) },
+  { label: "One number (0-9)", test: (p) => /\d/.test(p) },
+  { label: "One special character (e.g. ! @ # $ %)", test: (p) => /[^A-Za-z0-9\s]/.test(p) },
+  { label: "No spaces", test: (p) => p.length > 0 && !/\s/.test(p) },
+];
+const passwordProblems = (p: string) => PASSWORD_RULES.filter((r) => !r.test(p));
+
+interface PasswordFieldProps {
+  label: string;
+  value: string;
+  placeholder?: string;
+  error?: string;
+  onChange: (value: string) => void;
+}
+
+// Password input with a show/hide button.
+function PasswordField({ label, value, placeholder, error, onChange }: PasswordFieldProps) {
+  const [show, setShow] = useState(false);
+  return (
+    <div>
+      <RequiredLabel text={label} />
+      <div className="relative">
+        <input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete="new-password"
+          maxLength={64}
+          aria-invalid={!!error}
+          className="w-full pl-4 pr-11 py-2.5 rounded-xl border text-sm outline-none transition-all"
+          style={fieldStyle(error)}
+        />
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
+          aria-label={show ? "Hide password" : "Show password"}
+          title={show ? "Hide password" : "Show password"}
+        >
+          {show ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      </div>
+      <FieldError text={error} />
+    </div>
+  );
+}
+
+// Live checklist + strength bar under the password.
+function PasswordChecklist({ password }: { password: string }) {
+  const passed = PASSWORD_RULES.filter((r) => r.test(password)).length;
+  const total = PASSWORD_RULES.length;
+  const strength = !password ? "" : passed <= 3 ? "Weak" : passed < total ? "Fair" : "Strong";
+  const color = strength === "Strong" ? "#16A34A" : strength === "Fair" ? "#F59E0B" : "#EF4444";
+  return (
+    <div className="-mt-1 rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${(passed / total) * 100}%`, background: password ? color : "transparent" }}
+          />
+        </div>
+        {strength && (
+          <span className="text-xs font-semibold" style={{ color }}>
+            {strength}
+          </span>
+        )}
+      </div>
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+        {PASSWORD_RULES.map((r) => {
+          const ok = r.test(password);
+          return (
+            <li key={r.label} className="flex items-center gap-1.5 text-xs" style={{ color: ok ? "#16A34A" : "var(--muted-foreground)" }}>
+              {ok ? <Check size={12} /> : <X size={12} />}
+              {r.label}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 type Errors = Record<string, string>;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -66,6 +154,25 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SCHOOL_DOMAIN = "cec.edu.ph";
 // Philippine mobile number: 09XXXXXXXXX or +639XXXXXXXXX (spaces/dashes allowed)
 const PH_MOBILE_RE = /^(09|\+639)\d{9}$/;
+// School student ID numbers: exactly 9 digits, e.g. 202310259.
+const STUDENT_ID_RE = /^\d{9}$/;
+const STUDENT_ID_MSG = "Student ID must be exactly 9 digits, like 202310259.";
+const ID_TAKEN_MSG = "This student ID is already registered. If it's yours, log in instead.";
+
+type IdStatus = "idle" | "checking" | "ok" | "taken" | "error";
+
+// Asks the server whether this student ID is free.
+async function fetchIdStatus(id: string): Promise<IdStatus> {
+  try {
+    const res = await apiFetch(`/api/auth/check-student-id/${encodeURIComponent(id)}`);
+    if (!res.ok) return "error";
+    const data = await res.json();
+    if (!data.valid) return "idle";
+    return data.available ? "ok" : "taken";
+  } catch {
+    return "error";
+  }
+}
 
 export function RegisterPage({ onBack }: RegisterPageProps) {
   const [step, setStep] = useState(1);
@@ -99,6 +206,28 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
     confirmPassword: "",
   });
 
+  // Live check: is this student ID already registered?
+  const [idStatus, setIdStatus] = useState<IdStatus>("idle");
+  useEffect(() => {
+    const id = form.studentId.trim();
+    if (!STUDENT_ID_RE.test(id)) {
+      setIdStatus("idle");
+      return;
+    }
+    setIdStatus("checking");
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const status = await fetchIdStatus(id);
+      if (cancelled) return;
+      setIdStatus(status);
+      if (status === "taken") setErrors((p) => ({ ...p, studentId: ID_TAKEN_MSG }));
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [form.studentId]);
+
   const update = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => {
@@ -118,7 +247,8 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
       if (!t(form.firstName)) e.firstName = "Enter your first name.";
       if (!t(form.lastName)) e.lastName = "Enter your last name.";
       if (!t(form.studentId)) e.studentId = "Enter your student ID.";
-      else if (!/^[0-9-]+$/.test(t(form.studentId))) e.studentId = "Use numbers only (dashes allowed).";
+      else if (!STUDENT_ID_RE.test(t(form.studentId))) e.studentId = STUDENT_ID_MSG;
+      else if (idStatus === "taken") e.studentId = ID_TAKEN_MSG;
       if (!t(form.email)) e.email = "Enter your email address.";
       else if (!EMAIL_RE.test(t(form.email))) e.email = `Enter a valid email, like santos.maria@${SCHOOL_DOMAIN}.`;
       else if (!t(form.email).toLowerCase().endsWith(`@${SCHOOL_DOMAIN}`))
@@ -137,7 +267,8 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
 
     if (which === 3) {
       if (!form.password) e.password = "Create a password.";
-      else if (form.password.length < 8) e.password = "Use at least 8 characters.";
+      else if (passwordProblems(form.password).length > 0)
+        e.password = "Your password doesn't meet all the requirements below.";
       if (!form.confirmPassword) e.confirmPassword = "Re-enter your password.";
       else if (form.password && form.password !== form.confirmPassword) e.confirmPassword = "Passwords do not match.";
       if (!agreed) e.agreed = "Please agree to the terms to continue.";
@@ -146,10 +277,22 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
     return e;
   };
 
-  const goNext = () => {
+  const goNext = async () => {
     const found = validateStep(step);
     setErrors(found);
     if (Object.keys(found).length > 0) return;
+    // Make sure the student ID was checked before leaving step 1.
+    if (step === 1 && idStatus !== "ok") {
+      setIdStatus("checking");
+      const status = await fetchIdStatus(form.studentId.trim());
+      setIdStatus(status);
+      if (status === "taken") {
+        setErrors((p) => ({ ...p, studentId: ID_TAKEN_MSG }));
+        return;
+      }
+      // If the check itself failed (e.g. offline), the server still refuses
+      // duplicates when the form is submitted, so let the student continue.
+    }
     if (step < 3) setStep((s) => s + 1);
     else handleRegister();
   };
@@ -274,7 +417,20 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
                 <InputField label="Last Name" value={form.lastName} placeholder="e.g. Santos" autoComplete="family-name" error={errors.lastName} onChange={(v) => update("lastName", v)} />
               </div>
 
-              <InputField label="Student ID" value={form.studentId} placeholder="e.g. 202611016" inputMode="numeric" maxLength={20} error={errors.studentId} onChange={(v) => update("studentId", v)} />
+              <div>
+                <InputField label="Student ID" value={form.studentId} placeholder="e.g. 202310259" inputMode="numeric" maxLength={9} error={errors.studentId} onChange={(v) => update("studentId", v.replace(/\D/g, "").slice(0, 9))} />
+                {!errors.studentId && (
+                  <p className="text-xs mt-1" style={{ color: idStatus === "ok" ? "#16A34A" : "var(--muted-foreground)" }} aria-live="polite">
+                    {idStatus === "checking"
+                      ? "Checking student ID…"
+                      : idStatus === "ok"
+                      ? "✓ Student ID is available"
+                      : form.studentId.length > 0 && form.studentId.length < 9
+                      ? `${form.studentId.length}/9 digits`
+                      : "9 digits, numbers only"}
+                  </p>
+                )}
+              </div>
               <InputField label="School Email Address" value={form.email} type="email" placeholder="e.g. santos.maria@cec.edu.ph" autoComplete="email" inputMode="email" error={errors.email} onChange={(v) => update("email", v)} />
               <InputField
                   label="Contact Number"
@@ -420,8 +576,14 @@ export function RegisterPage({ onBack }: RegisterPageProps) {
             <div className="space-y-4">
               <h2 className="font-heading font-bold text-foreground mb-4">Account Setup</h2>
 
-              <InputField label="Create Password" value={form.password} type="password" placeholder="At least 8 characters" autoComplete="new-password" error={errors.password} onChange={(v) => update("password", v)} />
-              <InputField label="Confirm Password" value={form.confirmPassword} type="password" placeholder="Type it again" autoComplete="new-password" error={errors.confirmPassword} onChange={(v) => update("confirmPassword", v)} />
+              <PasswordField label="Create Password" value={form.password} placeholder="e.g. Sportpass@2026" error={errors.password} onChange={(v) => update("password", v)} />
+              <PasswordChecklist password={form.password} />
+              <PasswordField label="Confirm Password" value={form.confirmPassword} placeholder="Type it again" error={errors.confirmPassword} onChange={(v) => update("confirmPassword", v)} />
+              {form.confirmPassword && !errors.confirmPassword && (
+                <p className="-mt-2 text-xs" style={{ color: form.password === form.confirmPassword ? "#16A34A" : "#EF4444" }}>
+                  {form.password === form.confirmPassword ? "✓ Passwords match" : "Passwords do not match yet"}
+                </p>
+              )}
 
               <div
                 className="rounded-xl p-4"

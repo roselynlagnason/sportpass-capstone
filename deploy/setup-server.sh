@@ -110,6 +110,7 @@ server {
 
 server {
     listen 443 ssl default_server;
+    listen 1982 ssl;   # public address 103.142.9.22:1982 (school router forwards here)
     server_name _;
 
     ssl_certificate     /etc/ssl/sportpass/sportpass.crt;
@@ -156,7 +157,7 @@ sudo systemctl reload nginx
 
 step "7/7 Firewall"
 if sudo ufw status | grep -q "Status: active"; then
-  sudo ufw allow 22/tcp; sudo ufw allow 80/tcp; sudo ufw allow 443/tcp
+  sudo ufw allow 22/tcp; sudo ufw allow 80/tcp; sudo ufw allow 443/tcp; sudo ufw allow 1982/tcp
 fi
 
 IP_LAN="$(hostname -I | awk '{print $1}')"

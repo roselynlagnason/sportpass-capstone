@@ -510,25 +510,30 @@ export function ActivityManagement() {
           style={{ background: "rgba(0,0,0,0.5)" }}
         >
           <div
-            className="w-full max-w-lg rounded-2xl p-5 sm:p-6 shadow-2xl max-h-[90dvh] overflow-y-auto"
+            className="w-full max-w-lg rounded-2xl shadow-2xl max-h-[90dvh] flex flex-col overflow-hidden"
             style={{ background: "var(--card)" }}
           >
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="font-heading font-bold text-foreground text-lg">
+            <div
+              className="flex items-center gap-3 px-5 sm:px-6 py-4 border-b"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <h3 className="flex-1 min-w-0 truncate font-heading font-bold text-foreground text-lg">
                 {editing ? "Edit Activity" : "Create New Activity"}
               </h3>
               <button
+                type="button"
                 onClick={() => {
                   setShowCreate(false);
                   resetForm();
                 }}
-                className="text-muted-foreground hover:text-foreground text-xl leading-none"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted text-xl leading-none"
+                aria-label="Close"
               >
                 ×
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-4">
               <div>
                 <label className="text-sm font-semibold text-foreground mb-1.5 block">
                   Sport/Event
@@ -749,10 +754,12 @@ export function ActivityManagement() {
                     <option value="completed">Completed</option>
                   </select>
                 </div>
-              </div>
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div
+              className="flex gap-3 px-5 sm:px-6 py-4 border-t"
+              style={{ borderColor: "var(--border)", background: "var(--card)" }}
+            >
               <button
                 onClick={() => {
                   setShowCreate(false);
@@ -773,7 +780,7 @@ export function ActivityManagement() {
               </button>
             </div>
           </div>
-        
+        </div>
       )}
     </div>
   );

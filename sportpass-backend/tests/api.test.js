@@ -32,6 +32,7 @@ const fakeDb = {
     if (/SELECT day_id FROM sportfest_days WHERE sportfest_date/.test(sql)) { rows = scenario.isDay ? [{ day_id: 3 }] : []; return setImmediate(() => cb(null, rows)); }
     if (/FROM offline_scans WHERE client_id/.test(sql)) { rows = scenario.seen ? [{ status_code: 200, response: JSON.stringify({ action: "time_in", message: "Time-in recorded successfully." }) }] : []; return setImmediate(() => cb(null, rows)); }
     if (/JOIN sportfest_days sd ON sd.day_id = \?/.test(sql)) { rows = [{ amount: 60, legacy_paid: 0, paid_raw: scenario.paid ?? 0, is_over: scenario.over ?? 1 }]; return setImmediate(() => cb(null, rows)); }
+    if (/SELECT 1 FROM students WHERE student_id/.test(sql)) { rows = scenario.idTaken ? [{ 1: 1 }] : []; return setImmediate(() => cb(null, rows)); }
     if (/information_schema/.test(sql)) rows = [{ n: 1 }];
     else if (/AS records/.test(sql)) rows = [{ records: scenario.records ?? 0 }];
     else if (/AS is_past/.test(sql)) rows = [{ is_past: scenario.past ? 1 : 0 }];
@@ -211,7 +212,7 @@ expectStatus("student can't see another's payments", "GET", "/api/fines/payments
 async function register(email) {
   const { port } = server.address();
   const fd = new FormData();
-  const fields = { student_id: "202611016", first_name: "Maria", last_name: "Santos", email, password: "password123",
+  const fields = { student_id: "202611016", first_name: "Maria", last_name: "Santos", email, password: "Sportpass@2026",
     year_level: "1st Year", gender: "Female", section: "A", contact: "09171234567" };
   for (const [k, v] of Object.entries(fields)) fd.append(k, v);
   fd.append("profile_photo", new Blob([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])], { type: "image/png" }), "me.png");
@@ -223,6 +224,44 @@ test("registration refuses non-school emails", async () => {
   const r = await register("maria.santos@gmail.com");
   assert.equal(r.status, 400);
   assert.match(r.json.message, /school email/);
+});
+test("registration refuses a student ID that isn't 9 digits", async () => {
+  scenario = {};
+  const { port } = server.address();
+  const fd = new FormData();
+  const fields = { student_id: "12345", first_name: "Maria", last_name: "Santos", email: "santos.maria@cec.edu.ph", password: "Sportpass@2026",
+    year_level: "1st Year", gender: "Female", section: "A", contact: "09171234567" };
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  fd.append("profile_photo", new Blob([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])], { type: "image/png" }), "me.png");
+  const res = await fetch(`http://127.0.0.1:${port}/api/auth/register`, { method: "POST", body: fd });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).message, /9 digits/);
+});
+test("student ID check: wrong length is invalid", async () => {
+  const { port } = server.address();
+  const j = await (await fetch(`http://127.0.0.1:${port}/api/auth/check-student-id/2023`)).json();
+  assert.equal(j.valid, false);
+});
+test("student ID check: taken vs available", async () => {
+  const { port } = server.address();
+  scenario = { idTaken: true };
+  let j = await (await fetch(`http://127.0.0.1:${port}/api/auth/check-student-id/202310259`)).json();
+  assert.equal(j.available, false);
+  scenario = {};
+  j = await (await fetch(`http://127.0.0.1:${port}/api/auth/check-student-id/202310259`)).json();
+  assert.equal(j.available, true);
+});
+test("registration refuses a weak password", async () => {
+  scenario = {};
+  const { port } = server.address();
+  const fd = new FormData();
+  const fields = { student_id: "202310259", first_name: "Maria", last_name: "Santos", email: "santos.maria@cec.edu.ph", password: "password123",
+    year_level: "1st Year", gender: "Female", section: "A", contact: "09171234567" };
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  fd.append("profile_photo", new Blob([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])], { type: "image/png" }), "me.png");
+  const res = await fetch(`http://127.0.0.1:${port}/api/auth/register`, { method: "POST", body: fd });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).message, /uppercase/);
 });
 test("registration accepts a school email", async () => {
   scenario = {};
